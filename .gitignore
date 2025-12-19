@@ -1,0 +1,8 @@
+# WordPress sensitive config
+wp-config.php
+
+# Uploads
+wp-content/uploads/
+
+# Cache / logs
+*.log

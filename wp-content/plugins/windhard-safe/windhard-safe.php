@@ -26,6 +26,9 @@ class Windhard_Safe {
     /** @var bool */
     private $authenticated_user = false;
 
+    /** @var bool */
+    private $is_private_request = false;
+
     public function __construct() {
         add_action( 'plugins_loaded', [ $this, 'detect_private_entry' ], 0 );
         add_action( 'init', [ $this, 'guard_login_and_admin' ], 0 );
@@ -40,10 +43,18 @@ class Windhard_Safe {
         $this->request_path = $this->current_path();
 
         if ( $this->is_private_path( $this->request_path ) ) {
-            $this->is_whitelisted = true;
+            $this->is_whitelisted    = true;
+            $this->is_private_request = true;
+
             if ( ! isset( $GLOBALS[ self::GLOBAL_FLAG ] ) ) {
                 $GLOBALS[ self::GLOBAL_FLAG ] = true;
             }
+
+            if ( ! headers_sent() ) {
+                header( 'X-Windhard-Safe: whitelisted' );
+            }
+        } elseif ( $this->looks_like_private_script() ) {
+            $this->is_private_request = true;
         }
     }
 
@@ -65,6 +76,10 @@ class Windhard_Safe {
     }
 
     public function handle_private_login() {
+        if ( $this->is_private_request && ! $this->is_whitelisted ) {
+            $this->deny_request();
+        }
+
         if ( ! $this->is_whitelisted || $this->should_bypass() ) {
             return;
         }
@@ -115,8 +130,48 @@ class Windhard_Safe {
     }
 
     private function is_private_path( $path ) {
-        $slug = '/' . self::LOGIN_SLUG;
-        return $path === $slug || $path === $slug . '/' || $path === $slug . '.php';
+        $slug          = '/' . self::LOGIN_SLUG;
+        $normalized    = rtrim( $path, '/' );
+        $script_name   = isset( $_SERVER['SCRIPT_NAME'] ) ? wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '';
+        $php_self      = isset( $_SERVER['PHP_SELF'] ) ? wp_unslash( $_SERVER['PHP_SELF'] ) : '';
+        $script_base   = basename( $script_name );
+        $php_self_base = basename( $php_self );
+
+        if ( $normalized === $slug || $normalized === $slug . '.php' ) {
+            return true;
+        }
+
+        if ( $this->ends_with( $normalized, $slug . '.php' ) || $this->ends_with( $normalized, $slug ) ) {
+            return true;
+        }
+
+        if ( 'windlogin.php' === $script_base || 'windlogin.php' === $php_self_base ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function looks_like_private_script() {
+        $script_name = isset( $_SERVER['SCRIPT_NAME'] ) ? wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '';
+        $php_self    = isset( $_SERVER['PHP_SELF'] ) ? wp_unslash( $_SERVER['PHP_SELF'] ) : '';
+
+        return 'windlogin.php' === basename( $script_name ) || 'windlogin.php' === basename( $php_self );
+    }
+
+    private function ends_with( $haystack, $needle ) {
+        if ( '' === $needle ) {
+            return true;
+        }
+
+        $haystack_length = strlen( $haystack );
+        $needle_length   = strlen( $needle );
+
+        if ( $needle_length > $haystack_length ) {
+            return false;
+        }
+
+        return substr( $haystack, -$needle_length ) === $needle;
     }
 
     private function private_login_url() {

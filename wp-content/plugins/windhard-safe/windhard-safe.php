@@ -120,7 +120,7 @@ class Windhard_Safe {
     }
 
     private function private_login_url() {
-        return home_url( '/' . self::LOGIN_SLUG . '/' );
+        return home_url( '/' . self::LOGIN_SLUG . '.php' );
     }
 
     private function is_core_login_request() {

@@ -47,6 +47,8 @@ final class Wind_Warehouse_Plugin {
 
         add_action('plugins_loaded', [self::class, 'maybe_upgrade_schema']);
         add_action('plugins_loaded', [self::class, 'maybe_ensure_roles']);
+        add_action('init', [self::class, 'register_shortcodes']);
+        add_action('admin_init', [self::class, 'maybe_ensure_portal_page']);
         add_action('admin_init', [self::class, 'maybe_redirect_from_admin']);
         add_filter('login_redirect', [self::class, 'filter_login_redirect'], 10, 3);
     }
@@ -54,6 +56,7 @@ final class Wind_Warehouse_Plugin {
     public static function on_activation(): void {
         Wind_Warehouse_Schema::maybe_upgrade_schema();
         self::ensure_roles();
+        Wind_Warehouse_Portal::ensure_portal_page(true);
     }
 
     public static function on_deactivation(): void {
@@ -66,6 +69,30 @@ final class Wind_Warehouse_Plugin {
 
     public static function maybe_ensure_roles(): void {
         self::ensure_roles();
+    }
+
+    public static function register_shortcodes(): void {
+        Wind_Warehouse_Portal::register_shortcode();
+    }
+
+    public static function maybe_ensure_portal_page(): void {
+        if (!is_admin()) {
+            return;
+        }
+
+        if (!is_user_logged_in()) {
+            return;
+        }
+
+        if (wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST) || wp_doing_cron()) {
+            return;
+        }
+
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        Wind_Warehouse_Portal::ensure_portal_page();
     }
 
     private static function ensure_roles(): void {

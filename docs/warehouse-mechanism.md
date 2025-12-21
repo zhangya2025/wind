@@ -54,6 +54,15 @@
   - 若用户角色属于三类仓库/经销商且具备 wh_view_portal 且不具备 manage_options，则强制落点 home_url('/warehouse/')。
   - 若用户具备 manage_options 或未匹配上述角色/能力，则尊重 redirect_to/核心默认。
 
+- **门户壳与访问控制**：
+  - 激活时如不存在 slug=warehouse 的页面，自动创建一个 Page（title=Warehouse，content=[wind_warehouse_portal]）。
+  - 仅在管理员后台（admin_init 且 current_user_can('manage_options')，排除 AJAX/REST/cron）执行一次补救式 ensure_portal_page，用于升级后补齐缺失页面；不在前台或登录相关请求触发写库。
+  - 注册 shortcode [wind_warehouse_portal]，在渲染时按以下规则：
+    - 未登录：status_header(404) 返回空内容，不做任何跳转，保持风硬登录基线的 404 行为。
+    - 已登录但无 wh_view_portal：wp_die 403，不跳转。
+    - 已登录且具备 wh_view_portal：渲染 Wind Warehouse Portal，展示标题、当前用户信息与导航。
+  - 导航与子页面：通过 query 参数 wh 承载子路由，链接形如 /warehouse/?wh=skus（无 rewrite 依赖）；模块 dashboard/skus/dealers/generate/ship/reset-b/monitor-hq/reports-monthly/reports-yearly 仅显示 “Coming soon: {模块名}” 占位。
+
 ### 2.1 角色与能力设计（论证，不含代码）
 - **角色-能力矩阵**：
   - **warehouse_staff**：wh_view_portal、wh_ship_codes、wh_view_reports。定位为一线仓库操作人员，负责出库与基础报表查看，不具备批次生成或主数据维护权限。

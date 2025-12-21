@@ -27,6 +27,8 @@ class Windhard_Safe {
         add_filter( 'login_url', [ $this, 'filter_login_url' ], 10, 3 );
         add_filter( 'lostpassword_url', [ $this, 'filter_login_related_url' ], 10, 2 );
         add_filter( 'register_url', [ $this, 'filter_login_related_url' ], 10, 1 );
+        add_filter( 'logout_url', [ $this, 'filter_logout_url' ], 10, 2 );
+        add_filter( 'logout_redirect', [ $this, 'filter_logout_redirect' ], 10, 3 );
 
         add_filter( 'site_url', [ $this, 'rewrite_core_login_urls' ], 10, 4 );
         add_filter( 'network_site_url', [ $this, 'rewrite_core_login_urls' ], 10, 4 );
@@ -74,6 +76,10 @@ class Windhard_Safe {
             return;
         }
 
+        if ( $this->maybe_delegate_logout() ) {
+            return;
+        }
+
         $this->delegate_to_core_login();
     }
 
@@ -103,6 +109,41 @@ class Windhard_Safe {
         exit;
     }
 
+    private function maybe_delegate_logout() {
+        if ( ! $this->is_logout_request() ) {
+            return false;
+        }
+
+        if ( ! is_user_logged_in() ) {
+            return false;
+        }
+
+        $nonce = $_REQUEST['_wpnonce'] ?? '';
+        if ( ! $nonce || ! wp_verify_nonce( $nonce, 'log-out' ) ) {
+            return false;
+        }
+
+        if ( ! defined( 'WINDHARD_SAFE_LOGOUT_PROXY' ) ) {
+            define( 'WINDHARD_SAFE_LOGOUT_PROXY', true );
+        }
+
+        $_GET['action']     = 'logout';
+        $_REQUEST['action'] = 'logout';
+
+        $redirect = $_REQUEST['redirect_to'] ?? '';
+        if ( empty( $redirect ) ) {
+            $_GET['redirect_to']     = $this->private_login_url();
+            $_REQUEST['redirect_to'] = $this->private_login_url();
+        }
+
+        $GLOBALS['pagenow']     = 'wp-login.php';
+        $_SERVER['SCRIPT_NAME'] = '/wp-login.php';
+        $_SERVER['PHP_SELF']    = '/wp-login.php';
+
+        require ABSPATH . 'wp-login.php';
+        exit;
+    }
+
     /* ---------- URL rewriting ---------- */
 
     public function filter_login_url( $login_url, $redirect, $force_reauth ) {
@@ -123,6 +164,27 @@ class Windhard_Safe {
             $target = add_query_arg( 'redirect_to', rawurlencode( $redirect ), $target );
         }
         return $target;
+    }
+
+    public function filter_logout_url( $logout_url, $redirect ) {
+        $target = $this->private_login_url();
+
+        $params = [];
+        $parts  = wp_parse_url( $logout_url );
+        if ( ! empty( $parts['query'] ) ) {
+            parse_str( $parts['query'], $params );
+        }
+
+        $params['action'] = 'logout';
+        if ( ! empty( $redirect ) ) {
+            $params['redirect_to'] = $redirect;
+        }
+
+        return add_query_arg( $params, $target );
+    }
+
+    public function filter_logout_redirect( $redirect_to, $requested_redirect_to, $user ) {
+        return $this->private_login_url();
     }
 
     public function rewrite_core_login_urls( $url ) {
@@ -177,6 +239,10 @@ class Windhard_Safe {
     }
 
     private function is_core_login_request() {
+        if ( defined( 'WINDHARD_SAFE_LOGOUT_PROXY' ) && WINDHARD_SAFE_LOGOUT_PROXY ) {
+            return false;
+        }
+
         return str_contains( $this->request_path, 'wp-login.php' )
             || ( isset( $GLOBALS['pagenow'] ) && $GLOBALS['pagenow'] === 'wp-login.php' );
     }
@@ -185,6 +251,14 @@ class Windhard_Safe {
         $uri  = $_SERVER['REQUEST_URI'] ?? '';
         $path = parse_url( $uri, PHP_URL_PATH );
         return $path ? '/' . ltrim( $path, '/' ) : '/';
+    }
+
+    private function is_logout_request() {
+        if ( ! isset( $_GET['action'] ) || $_GET['action'] !== 'logout' ) {
+            return false;
+        }
+
+        return $this->is_private_path( $this->request_path );
     }
 
     private function should_bypass() {

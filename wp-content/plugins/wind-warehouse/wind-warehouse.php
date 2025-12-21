@@ -1,19 +1,15 @@
 <?php
 /**
- * Plugin Name: Wind Warehouse System
- * Description: Provides warehouse and anti-counterfeit data structures.
- * Version: 0.1.0
- * Author: Wind
+ * Plugin Name: Wind Warehouse
+ * Description: Warehouse and anti-counterfeit system bootstrap with schema management, roles, wp-admin isolation, and login redirects.
+ * Version: 0.2.0
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-require_once plugin_dir_path(__FILE__) . 'includes/db/class-wind-warehouse-schema.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-wind-warehouse-plugin.php';
+require_once __DIR__ . '/includes/db/class-wind-warehouse-schema.php';
+require_once __DIR__ . '/includes/class-wind-warehouse-plugin.php';
 
-Wind_Warehouse_Plugin::init();
-
-register_activation_hook(__FILE__, array('Wind_Warehouse_Plugin', 'activate'));
-register_deactivation_hook(__FILE__, array('Wind_Warehouse_Plugin', 'deactivate'));
+Wind_Warehouse_Plugin::init(__FILE__);

@@ -13,6 +13,7 @@ final class Wind_Warehouse_Plugin {
                 'wh_view_portal',
                 'wh_ship_codes',
                 'wh_view_reports',
+                'read',
             ],
         ],
         'warehouse_manager' => [
@@ -25,6 +26,7 @@ final class Wind_Warehouse_Plugin {
                 'wh_ship_codes',
                 'wh_view_reports',
                 'wh_reset_consumer_count_internal',
+                'read',
             ],
         ],
         'dealer_user' => [
@@ -32,6 +34,7 @@ final class Wind_Warehouse_Plugin {
             'caps'  => [
                 'wh_view_portal',
                 'wh_reset_consumer_count_dealer',
+                'read',
             ],
         ],
     ];
@@ -43,6 +46,7 @@ final class Wind_Warehouse_Plugin {
         register_deactivation_hook($plugin_file, [self::class, 'on_deactivation']);
 
         add_action('plugins_loaded', [self::class, 'maybe_upgrade_schema']);
+        add_action('plugins_loaded', [self::class, 'maybe_ensure_roles']);
         add_action('admin_init', [self::class, 'maybe_redirect_from_admin']);
         add_filter('login_redirect', [self::class, 'filter_login_redirect'], 10, 3);
     }
@@ -58,6 +62,10 @@ final class Wind_Warehouse_Plugin {
 
     public static function maybe_upgrade_schema(): void {
         Wind_Warehouse_Schema::maybe_upgrade_schema();
+    }
+
+    public static function maybe_ensure_roles(): void {
+        self::ensure_roles();
     }
 
     private static function ensure_roles(): void {

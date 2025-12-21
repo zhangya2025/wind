@@ -41,9 +41,10 @@
 
 ### 2.0 本 PR 实际实现点（代码）
 - **角色与能力（activation 建立/补齐）**：
-  - warehouse_staff：wh_view_portal, wh_ship_codes, wh_view_reports。
-  - warehouse_manager：wh_view_portal, wh_manage_skus, wh_manage_dealers, wh_generate_codes, wh_ship_codes, wh_view_reports, wh_reset_consumer_count_internal。
-  - dealer_user：wh_view_portal, wh_reset_consumer_count_dealer。
+  - warehouse_staff：wh_view_portal, wh_ship_codes, wh_view_reports, read（确保 admin_init 能读取上下文并触发跳转）。
+  - warehouse_manager：wh_view_portal, wh_manage_skus, wh_manage_dealers, wh_generate_codes, wh_ship_codes, wh_view_reports, wh_reset_consumer_count_internal, read。
+  - dealer_user：wh_view_portal, wh_reset_consumer_count_dealer, read。
+  - 激活时确保创建/补齐，且在 plugins_loaded 再次执行补齐以便升级后无需重新激活即可获得基础能力。
 - **schema 维持**：activation 与 plugins_loaded 继续调用 schema 升级入口（wh_schema_version=1.0.1），保留原有建表/升级链路，不因本次角色与跳转实现而绕开。 
 - **wp-admin 隔离（admin_init，仅已登录）**：
   - 触发：is_user_logged_in() 且 is_admin()，当前用户角色属于三类仓库/经销商角色且具备 wh_view_portal，且不具备 manage_options。

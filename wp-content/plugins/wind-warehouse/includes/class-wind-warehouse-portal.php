@@ -28,6 +28,14 @@ final class Wind_Warehouse_Portal {
         return home_url('/' . self::PAGE_SLUG . '/');
     }
 
+    private static function portal_query_base_url(): string {
+        return add_query_arg('pagename', self::PAGE_SLUG, home_url('/index.php'));
+    }
+
+    private static function portal_post_url(string $view_key): string {
+        return add_query_arg('wh', $view_key, self::portal_query_base_url());
+    }
+
     public static function ensure_portal_page(bool $force = false): void {
         if (!$force) {
             if (!is_admin()) {

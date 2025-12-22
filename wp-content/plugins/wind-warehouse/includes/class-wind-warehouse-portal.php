@@ -10,6 +10,8 @@ final class Wind_Warehouse_Portal {
 
     public static function register_shortcode(): void {
         add_shortcode(self::SHORTCODE, [self::class, 'render_portal']);
+        add_action('wp_ajax_ww_add_sku', [self::class, 'ajax_add_sku']);
+        add_action('wp_ajax_ww_add_dealer', [self::class, 'ajax_add_dealer']);
     }
 
     public static function portal_url(): string {
@@ -249,6 +251,71 @@ final class Wind_Warehouse_Portal {
         return __('Invalid request. Please try again.', 'wind-warehouse');
     }
 
+    public static function ajax_add_sku(): void {
+        if (!is_user_logged_in()) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!current_user_can('wh_manage_skus')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_skus_add')) {
+            wp_die(__('Invalid request. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        $sku_code = isset($_POST['sku_code']) ? sanitize_text_field(wp_unslash($_POST['sku_code'])) : '';
+        $name     = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
+
+        if ($sku_code === '' || $name === '') {
+            wp_die(__('SKU code and name are required.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if (strlen($sku_code) > 191) {
+            wp_die(__('SKU code must be 191 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if (strlen($name) > 255) {
+            wp_die(__('Name must be 255 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'wh_skus';
+
+        $existing_id = $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$table} WHERE sku_code = %s LIMIT 1", $sku_code)
+        );
+
+        if ($existing_id !== null) {
+            wp_die(__('SKU code already exists.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        $data = [
+            'sku_code'   => $sku_code,
+            'name'       => $name,
+            'status'     => 'active',
+            'created_at' => current_time('mysql'),
+            'updated_at' => current_time('mysql'),
+        ];
+
+        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s']);
+
+        if ($inserted === false) {
+            wp_die(__('Could not create SKU. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        $redirect_url = add_query_arg(
+            [
+                'wh'  => 'skus',
+                'msg' => 'created',
+            ],
+            self::portal_url()
+        );
+
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
+
     private static function handle_add_sku(): ?string {
         if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_skus_add')) {
             return __('Invalid request. Please try again.', 'wind-warehouse');
@@ -362,6 +429,72 @@ final class Wind_Warehouse_Portal {
         exit;
     }
 
+    public static function ajax_add_dealer(): void {
+        if (!is_user_logged_in()) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!current_user_can('wh_manage_dealers')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_dealers_add')) {
+            wp_die(__('Invalid request. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        $dealer_code = isset($_POST['dealer_code']) ? sanitize_text_field(wp_unslash($_POST['dealer_code'])) : '';
+        $name        = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
+
+        if ($dealer_code === '' || $name === '') {
+            wp_die(__('Dealer code and name are required.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if (strlen($dealer_code) > 191) {
+            wp_die(__('Dealer code must be 191 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if (strlen($name) > 255) {
+            wp_die(__('Name must be 255 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'wh_dealers';
+
+        $existing_id = $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$table} WHERE dealer_code = %s LIMIT 1", $dealer_code)
+        );
+
+        if ($existing_id !== null) {
+            wp_die(__('Dealer code already exists.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        $now = current_time('mysql');
+        $data = [
+            'dealer_code' => $dealer_code,
+            'name'        => $name,
+            'status'      => 'active',
+            'created_at'  => $now,
+            'updated_at'  => $now,
+        ];
+
+        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s']);
+
+        if ($inserted === false) {
+            wp_die(__('Could not create dealer. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        $redirect_url = add_query_arg(
+            [
+                'wh'  => 'dealers',
+                'msg' => 'created',
+            ],
+            self::portal_url()
+        );
+
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
+
     private static function render_skus_view(?string $error_message): string {
         global $wpdb;
         $table = $wpdb->prefix . 'wh_skus';
@@ -374,7 +507,8 @@ final class Wind_Warehouse_Portal {
             ARRAY_A
         );
 
-        $form_action = self::portal_post_url('skus');
+        $form_action   = admin_url('admin-ajax.php');
+        $toggle_action = self::portal_url();
 
         $html  = '<div class="ww-skus">';
         if ($error_message !== null) {
@@ -386,7 +520,7 @@ final class Wind_Warehouse_Portal {
         $html .= '<input type="text" name="sku_code" required /></label></p>';
         $html .= '<p><label>' . esc_html__('Name', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="name" required /></label></p>';
-        $html .= '<input type="hidden" name="ww_action" value="add_sku" />';
+        $html .= '<input type="hidden" name="action" value="ww_add_sku" />';
         $html .= wp_nonce_field('ww_skus_add', 'ww_nonce', true, false);
         $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
         $html .= '</form>';
@@ -414,7 +548,7 @@ final class Wind_Warehouse_Portal {
                 $html .= '<td>' . esc_html($sku['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($sku['updated_at']) . '</td>';
                 $html .= '<td>';
-                $html .= '<form method="post" action="' . esc_url($form_action) . '" style="display:inline">';
+                $html .= '<form method="post" action="' . esc_url($toggle_action) . '" style="display:inline">';
                 $html .= '<input type="hidden" name="ww_action" value="toggle_status" />';
                 $html .= '<input type="hidden" name="sku_id" value="' . esc_attr($sku['id']) . '" />';
                 $html .= wp_nonce_field('ww_skus_toggle_' . $sku['id'], 'ww_nonce', true, false);
@@ -446,7 +580,8 @@ final class Wind_Warehouse_Portal {
             ARRAY_A
         );
 
-        $form_action = self::portal_post_url('dealers');
+        $form_action   = admin_url('admin-ajax.php');
+        $toggle_action = self::portal_url();
 
         $html  = '<div class="ww-dealers">';
         if ($error_message !== null) {
@@ -458,7 +593,7 @@ final class Wind_Warehouse_Portal {
         $html .= '<input type="text" name="dealer_code" required /></label></p>';
         $html .= '<p><label>' . esc_html__('Name', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="name" required /></label></p>';
-        $html .= '<input type="hidden" name="ww_action" value="add_dealer" />';
+        $html .= '<input type="hidden" name="action" value="ww_add_dealer" />';
         $html .= wp_nonce_field('ww_dealers_add', 'ww_nonce', true, false);
         $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
         $html .= '</form>';
@@ -490,7 +625,7 @@ final class Wind_Warehouse_Portal {
                 $button_label  = ($dealer['status'] === 'active') ? esc_html__('Disable', 'wind-warehouse') : esc_html__('Enable', 'wind-warehouse');
 
                 $html .= '<td>';
-                $html .= '<form method="post" action="' . esc_url($form_action) . '" style="display:inline">';
+                $html .= '<form method="post" action="' . esc_url($toggle_action) . '" style="display:inline">';
                 $html .= '<input type="hidden" name="ww_action" value="toggle_dealer" />';
                 $html .= '<input type="hidden" name="dealer_id" value="' . esc_attr($dealer['id']) . '" />';
                 $html .= '<input type="hidden" name="target_status" value="' . esc_attr($target_status) . '" />';

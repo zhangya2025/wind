@@ -12,6 +12,19 @@ final class Wind_Warehouse_Portal {
         add_shortcode(self::SHORTCODE, [self::class, 'render_portal']);
     }
 
+    public static function portal_url(): string {
+        $page = get_page_by_path(self::PAGE_SLUG);
+
+        if ($page instanceof WP_Post) {
+            $permalink = get_permalink($page->ID);
+            if ($permalink) {
+                return $permalink;
+            }
+        }
+
+        return home_url('/' . self::PAGE_SLUG . '/');
+    }
+
     public static function ensure_portal_page(bool $force = false): void {
         if (!$force) {
             if (!is_admin()) {
@@ -97,7 +110,7 @@ final class Wind_Warehouse_Portal {
     }
 
     private static function render_navigation(string $current_view, array $nav_items): string {
-        $base_url = home_url('/' . self::PAGE_SLUG . '/');
+        $base_url = self::portal_url();
         $html = '<nav><ul>';
 
         foreach ($nav_items as $key => $label) {

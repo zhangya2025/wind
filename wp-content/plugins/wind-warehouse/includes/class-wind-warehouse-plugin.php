@@ -95,19 +95,6 @@ final class Wind_Warehouse_Plugin {
         Wind_Warehouse_Portal::ensure_portal_page();
     }
 
-    private static function portal_url(): string {
-        $page = get_page_by_path('warehouse');
-
-        if ($page instanceof WP_Post) {
-            $permalink = get_permalink($page->ID);
-            if ($permalink) {
-                return $permalink;
-            }
-        }
-
-        return home_url('/warehouse/');
-    }
-
     private static function ensure_roles(): void {
         foreach (self::WAREHOUSE_ROLES as $role => $data) {
             $role_obj = get_role($role);
@@ -158,7 +145,7 @@ final class Wind_Warehouse_Plugin {
             return;
         }
 
-        wp_safe_redirect(self::portal_url());
+        wp_safe_redirect(Wind_Warehouse_Portal::portal_url());
         exit;
     }
 
@@ -179,7 +166,7 @@ final class Wind_Warehouse_Plugin {
             return $redirect_to;
         }
 
-        return self::portal_url();
+        return Wind_Warehouse_Portal::portal_url();
     }
 
     private static function user_is_target_role(WP_User $user): bool {

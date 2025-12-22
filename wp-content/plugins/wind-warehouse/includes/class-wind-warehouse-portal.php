@@ -4,6 +4,8 @@ if (!defined('ABSPATH')) {
 }
 
 final class Wind_Warehouse_Portal {
+    private const MAX_GENERATE_QTY = 200;
+    private const MAX_CODE_GENERATION_ATTEMPTS = 10;
     private const SHORTCODE = 'wind_warehouse_portal';
     private const PAGE_SLUG = 'warehouse';
     private const TITLE = 'Wind Warehouse Portal';
@@ -262,8 +264,12 @@ final class Wind_Warehouse_Portal {
         $quantity = isset($_POST['quantity']) ? absint($_POST['quantity']) : 0;
         $notes    = isset($_POST['notes']) ? sanitize_text_field(wp_unslash($_POST['notes'])) : '';
 
-        if ($sku_id < 1 || $quantity < 1 || $quantity > 100000) {
-            return __('Invalid SKU or quantity.', 'wind-warehouse');
+        if ($sku_id < 1 || $quantity < 1 || $quantity > self::MAX_GENERATE_QTY) {
+            return sprintf(
+                /* translators: %d: maximum quantity */
+                __('Quantity must be between 1 and %d.', 'wind-warehouse'),
+                self::MAX_GENERATE_QTY
+            );
         }
 
         if (strlen($notes) > 255) {
@@ -282,9 +288,12 @@ final class Wind_Warehouse_Portal {
             return __('Selected SKU is not available.', 'wind-warehouse');
         }
 
+        $code_table  = $wpdb->prefix . 'wh_codes';
         $batch_no = 'B' . gmdate('YmdHis') . '-' . wp_generate_password(6, false, false);
 
-        $data = [
+        $wpdb->query('START TRANSACTION');
+
+        $batch_data = [
             'batch_no'     => $batch_no,
             'sku_id'       => $sku_id,
             'quantity'     => $quantity,
@@ -293,13 +302,67 @@ final class Wind_Warehouse_Portal {
             'created_at'   => current_time('mysql'),
         ];
 
-        $formats = ['%s', '%d', '%d', '%s', '%d', '%s'];
+        $batch_formats = ['%s', '%d', '%d', '%s', '%d', '%s'];
 
-        $inserted = $wpdb->insert($batch_table, $data, $formats);
+        $inserted = $wpdb->insert($batch_table, $batch_data, $batch_formats);
 
         if ($inserted === false) {
+            $wpdb->query('ROLLBACK');
             return __('Could not create code batch. Please try again.', 'wind-warehouse');
         }
+
+        $batch_id = (int) $wpdb->insert_id;
+
+        if ($batch_id < 1) {
+            $wpdb->query('ROLLBACK');
+            return __('Could not determine batch ID.', 'wind-warehouse');
+        }
+
+        $code_generation_failed = false;
+
+        for ($i = 0; $i < $quantity; $i++) {
+            $code_inserted = false;
+
+            for ($attempt = 0; $attempt < self::MAX_CODE_GENERATION_ATTEMPTS; $attempt++) {
+                try {
+                    $code = bin2hex(random_bytes(10));
+                } catch (Exception $e) {
+                    $code_generation_failed = true;
+                    break;
+                }
+
+                $code_data = [
+                    'code'         => $code,
+                    'sku_id'       => $sku_id,
+                    'batch_id'     => $batch_id,
+                    'status'       => 'in_stock',
+                    'generated_at' => current_time('mysql'),
+                    'created_at'   => current_time('mysql'),
+                ];
+
+                $code_formats = ['%s', '%d', '%d', '%s', '%s', '%s'];
+                $code_inserted = $wpdb->insert($code_table, $code_data, $code_formats) !== false;
+
+                if ($code_inserted) {
+                    break;
+                }
+
+                if (stripos($wpdb->last_error, 'duplicate') === false) {
+                    break;
+                }
+            }
+
+            if (!$code_inserted) {
+                $code_generation_failed = true;
+            }
+
+            if ($code_generation_failed) {
+                $wpdb->query('ROLLBACK');
+                return __('Could not generate unique codes. Please try again.', 'wind-warehouse');
+            }
+        }
+
+        $wpdb->query('COMMIT');
 
         $redirect_url = add_query_arg(
             [
@@ -774,8 +837,9 @@ final class Wind_Warehouse_Portal {
 
     private static function render_generate_view(?string $error_message): string {
         global $wpdb;
-        $sku_table   = $wpdb->prefix . 'wh_skus';
-        $batch_table = $wpdb->prefix . 'wh_code_batches';
+        $sku_table    = $wpdb->prefix . 'wh_skus';
+        $batch_table  = $wpdb->prefix . 'wh_code_batches';
+        $code_table   = $wpdb->prefix . 'wh_codes';
 
         $skus = $wpdb->get_results(
             $wpdb->prepare(
@@ -788,8 +852,11 @@ final class Wind_Warehouse_Portal {
 
         $batches = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT b.id, b.batch_no, b.sku_id, b.quantity, b.notes, b.generated_by, b.created_at, s.sku_code FROM {$batch_table} b "
-                . "LEFT JOIN {$sku_table} s ON b.sku_id = s.id ORDER BY b.id DESC LIMIT %d",
+                "SELECT b.id, b.batch_no, b.sku_id, b.quantity, b.notes, b.generated_by, b.created_at, s.sku_code,"
+                . " COALESCE(c.code_count, 0) AS code_count FROM {$batch_table} b "
+                . "LEFT JOIN {$sku_table} s ON b.sku_id = s.id "
+                . "LEFT JOIN (SELECT batch_id, COUNT(*) AS code_count FROM {$code_table} GROUP BY batch_id) c ON b.id = c.batch_id "
+                . "ORDER BY b.id DESC LIMIT %d",
                 50
             ),
             ARRAY_A
@@ -816,7 +883,7 @@ final class Wind_Warehouse_Portal {
             $html .= '</select></label></p>';
 
             $html .= '<p><label>' . esc_html__('Quantity', 'wind-warehouse') . '<br />';
-            $html .= '<input type="number" name="quantity" min="1" max="100000" required /></label></p>';
+            $html .= '<input type="number" name="quantity" min="1" max="' . esc_attr(self::MAX_GENERATE_QTY) . '" required /></label></p>';
 
             $html .= '<p><label>' . esc_html__('Notes (optional)', 'wind-warehouse') . '<br />';
             $html .= '<input type="text" name="notes" maxlength="255" /></label></p>';
@@ -838,6 +905,7 @@ final class Wind_Warehouse_Portal {
         $html .= '<th>' . esc_html__('Notes', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Generated By', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Codes Generated', 'wind-warehouse') . '</th>';
         $html .= '</tr></thead>';
         $html .= '<tbody>';
 
@@ -852,6 +920,7 @@ final class Wind_Warehouse_Portal {
                 $html  .= '<td>' . esc_html($batch['notes']) . '</td>';
                 $html  .= '<td>' . esc_html($batch['generated_by']) . '</td>';
                 $html  .= '<td>' . esc_html($batch['created_at']) . '</td>';
+                $html  .= '<td>' . esc_html($batch['code_count']) . '</td>';
                 $html  .= '</tr>';
             }
         } else {

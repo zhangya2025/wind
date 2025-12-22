@@ -392,6 +392,7 @@ final class Wind_Warehouse_Portal {
         $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Actions', 'wind-warehouse') . '</th>';
         $html .= '</tr></thead>';
         $html .= '<tbody>';
 
@@ -404,10 +405,96 @@ final class Wind_Warehouse_Portal {
                 $html .= '<td>' . esc_html($sku['status']) . '</td>';
                 $html .= '<td>' . esc_html($sku['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($sku['updated_at']) . '</td>';
+                $html .= '<td>';
+                $html .= '<form method="post" action="' . esc_url($form_action) . '" style="display:inline">';
+                $html .= '<input type="hidden" name="ww_action" value="toggle_status" />';
+                $html .= '<input type="hidden" name="sku_id" value="' . esc_attr($sku['id']) . '" />';
+                $html .= wp_nonce_field('ww_skus_toggle_' . $sku['id'], 'ww_nonce', true, false);
+                $button_label = $sku['status'] === 'active' ? esc_html__('Disable', 'wind-warehouse') : esc_html__('Enable', 'wind-warehouse');
+                $html .= '<button type="submit">' . $button_label . '</button>';
+                $html .= '</form>';
+                $html .= '</td>';
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="6">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="7">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
+        }
+
+        $html .= '</tbody></table>';
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    private static function render_dealers_view(?string $error_message): string {
+        global $wpdb;
+        $table = $wpdb->prefix . 'wh_dealers';
+
+        $dealers = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, dealer_code, name, status, created_at, updated_at FROM {$table} ORDER BY id DESC LIMIT %d",
+                50
+            ),
+            ARRAY_A
+        );
+
+        $form_action = add_query_arg('wh', 'dealers', self::portal_url());
+
+        $html  = '<div class="ww-dealers">';
+        if ($error_message !== null) {
+            $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
+        }
+        $html .= '<form method="post" action="' . esc_url($form_action) . '">';
+        $html .= '<h2>' . esc_html__('Add Dealer', 'wind-warehouse') . '</h2>';
+        $html .= '<p><label>' . esc_html__('Dealer Code', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="dealer_code" required /></label></p>';
+        $html .= '<p><label>' . esc_html__('Name', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="name" required /></label></p>';
+        $html .= '<input type="hidden" name="ww_action" value="add_dealer" />';
+        $html .= wp_nonce_field('ww_dealers_add', 'ww_nonce', true, false);
+        $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
+        $html .= '</form>';
+
+        $html .= '<h2>' . esc_html__('Latest Dealers', 'wind-warehouse') . '</h2>';
+        $html .= '<table class="ww-table">';
+        $html .= '<thead><tr>';
+        $html .= '<th>' . esc_html__('ID', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Dealer Code', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Name', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Actions', 'wind-warehouse') . '</th>';
+        $html .= '</tr></thead>';
+        $html .= '<tbody>';
+
+        if (!empty($dealers)) {
+            foreach ($dealers as $dealer) {
+                $html .= '<tr>';
+                $html .= '<td>' . esc_html($dealer['id']) . '</td>';
+                $html .= '<td>' . esc_html($dealer['dealer_code']) . '</td>';
+                $html .= '<td>' . esc_html($dealer['name']) . '</td>';
+                $html .= '<td>' . esc_html($dealer['status']) . '</td>';
+                $html .= '<td>' . esc_html($dealer['created_at']) . '</td>';
+                $html .= '<td>' . esc_html($dealer['updated_at']) . '</td>';
+
+                $target_status = ($dealer['status'] === 'active') ? 'disabled' : 'active';
+                $button_label  = ($dealer['status'] === 'active') ? esc_html__('Disable', 'wind-warehouse') : esc_html__('Enable', 'wind-warehouse');
+
+                $html .= '<td>';
+                $html .= '<form method="post" action="' . esc_url($form_action) . '" style="display:inline">';
+                $html .= '<input type="hidden" name="ww_action" value="toggle_dealer" />';
+                $html .= '<input type="hidden" name="dealer_id" value="' . esc_attr($dealer['id']) . '" />';
+                $html .= '<input type="hidden" name="target_status" value="' . esc_attr($target_status) . '" />';
+                $html .= wp_nonce_field('ww_dealers_toggle', 'ww_nonce', true, false);
+                $html .= '<button type="submit">' . $button_label . '</button>';
+                $html .= '</form>';
+                $html .= '</td>';
+
+                $html .= '</tr>';
+            }
+        } else {
+            $html .= '<tr><td colspan="7">' . esc_html__('No dealers found.', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';

@@ -101,6 +101,8 @@ final class Wind_Warehouse_Portal {
             $error_message = self::handle_skus_submission($user);
         } elseif ($view_key === 'dealers') {
             $error_message = self::handle_dealers_submission($user);
+        } elseif ($view_key === 'generate') {
+            $error_message = self::handle_generate_submission($user);
         }
         $nav_items = self::filter_nav_items_by_capability($nav_items, $user);
         $content = self::render_content($view_key, $nav_items[$view_key], $error_message);
@@ -208,6 +210,10 @@ final class Wind_Warehouse_Portal {
             return self::render_dealers_view($error_message);
         }
 
+        if ($view_key === 'generate') {
+            return self::render_generate_view($error_message);
+        }
+
         return '<p>' . sprintf(
             /* translators: %s: module name */
             esc_html__('Coming soon: %s', 'wind-warehouse'),
@@ -231,6 +237,80 @@ final class Wind_Warehouse_Portal {
         }
 
         return __('Invalid request. Please try again.', 'wind-warehouse');
+    }
+
+    private static function handle_generate_submission(WP_User $user): ?string {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return null;
+        }
+
+        if (!self::user_can_access_view('generate', $user)) {
+            return __('Forbidden', 'wind-warehouse');
+        }
+
+        $action = isset($_POST['ww_action']) ? sanitize_text_field(wp_unslash($_POST['ww_action'])) : '';
+
+        if ($action !== 'create_batch') {
+            return __('Invalid request. Please try again.', 'wind-warehouse');
+        }
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_generate_add')) {
+            return __('Invalid request. Please try again.', 'wind-warehouse');
+        }
+
+        $sku_id = isset($_POST['sku_id']) ? absint($_POST['sku_id']) : 0;
+        $quantity = isset($_POST['quantity']) ? absint($_POST['quantity']) : 0;
+        $notes    = isset($_POST['notes']) ? sanitize_text_field(wp_unslash($_POST['notes'])) : '';
+
+        if ($sku_id < 1 || $quantity < 1 || $quantity > 100000) {
+            return __('Invalid SKU or quantity.', 'wind-warehouse');
+        }
+
+        if (strlen($notes) > 255) {
+            return __('Note must be 255 characters or fewer.', 'wind-warehouse');
+        }
+
+        global $wpdb;
+        $sku_table  = $wpdb->prefix . 'wh_skus';
+        $batch_table = $wpdb->prefix . 'wh_code_batches';
+
+        $sku_exists = $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$sku_table} WHERE id = %d AND status = %s", $sku_id, 'active')
+        );
+
+        if ($sku_exists === null) {
+            return __('Selected SKU is not available.', 'wind-warehouse');
+        }
+
+        $batch_no = 'B' . gmdate('YmdHis') . '-' . wp_generate_password(6, false, false);
+
+        $data = [
+            'batch_no'     => $batch_no,
+            'sku_id'       => $sku_id,
+            'quantity'     => $quantity,
+            'notes'        => $notes !== '' ? $notes : null,
+            'generated_by' => $user->ID,
+            'created_at'   => current_time('mysql'),
+        ];
+
+        $formats = ['%s', '%d', '%d', '%s', '%d', '%s'];
+
+        $inserted = $wpdb->insert($batch_table, $data, $formats);
+
+        if ($inserted === false) {
+            return __('Could not create code batch. Please try again.', 'wind-warehouse');
+        }
+
+        $redirect_url = add_query_arg(
+            [
+                'wh'  => 'generate',
+                'msg' => 'created',
+            ],
+            self::portal_url()
+        );
+
+        wp_safe_redirect($redirect_url);
+        exit;
     }
 
     private static function handle_dealers_submission(WP_User $user): ?string {
@@ -684,6 +764,98 @@ final class Wind_Warehouse_Portal {
             }
         } else {
             $html .= '<tr><td colspan="7">' . esc_html__('No dealers found.', 'wind-warehouse') . '</td></tr>';
+        }
+
+        $html .= '</tbody></table>';
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    private static function render_generate_view(?string $error_message): string {
+        global $wpdb;
+        $sku_table   = $wpdb->prefix . 'wh_skus';
+        $batch_table = $wpdb->prefix . 'wh_code_batches';
+
+        $skus = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, sku_code FROM {$sku_table} WHERE status = %s ORDER BY id DESC LIMIT %d",
+                'active',
+                100
+            ),
+            ARRAY_A
+        );
+
+        $batches = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT b.id, b.batch_no, b.sku_id, b.quantity, b.notes, b.generated_by, b.created_at, s.sku_code FROM {$batch_table} b "
+                . "LEFT JOIN {$sku_table} s ON b.sku_id = s.id ORDER BY b.id DESC LIMIT %d",
+                50
+            ),
+            ARRAY_A
+        );
+
+        $form_action = self::portal_post_url('generate');
+
+        $html  = '<div class="ww-generate">';
+        if ($error_message !== null) {
+            $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
+        }
+
+        $html .= '<form method="post" action="' . esc_url($form_action) . '">';
+        $html .= '<h2>' . esc_html__('Create Code Batch', 'wind-warehouse') . '</h2>';
+
+        if (empty($skus)) {
+            $html .= '<p>' . esc_html__('No active SKUs available. Please add SKUs first.', 'wind-warehouse') . '</p>';
+        } else {
+            $html .= '<p><label>' . esc_html__('SKU', 'wind-warehouse') . '<br />';
+            $html .= '<select name="sku_id" required>';
+            foreach ($skus as $sku) {
+                $html .= '<option value="' . esc_attr($sku['id']) . '">' . esc_html($sku['sku_code']) . '</option>';
+            }
+            $html .= '</select></label></p>';
+
+            $html .= '<p><label>' . esc_html__('Quantity', 'wind-warehouse') . '<br />';
+            $html .= '<input type="number" name="quantity" min="1" max="100000" required /></label></p>';
+
+            $html .= '<p><label>' . esc_html__('Notes (optional)', 'wind-warehouse') . '<br />';
+            $html .= '<input type="text" name="notes" maxlength="255" /></label></p>';
+
+            $html .= '<input type="hidden" name="ww_action" value="create_batch" />';
+            $html .= wp_nonce_field('ww_generate_add', 'ww_nonce', true, false);
+            $html .= '<p><button type="submit">' . esc_html__('Generate', 'wind-warehouse') . '</button></p>';
+        }
+
+        $html .= '</form>';
+
+        $html .= '<h2>' . esc_html__('Latest Batches', 'wind-warehouse') . '</h2>';
+        $html .= '<table class="ww-table">';
+        $html .= '<thead><tr>';
+        $html .= '<th>' . esc_html__('ID', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Batch No', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Quantity', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Notes', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Generated By', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
+        $html .= '</tr></thead>';
+        $html .= '<tbody>';
+
+        if (!empty($batches)) {
+            foreach ($batches as $batch) {
+                $sku_label = $batch['sku_code'] !== null ? $batch['sku_code'] : $batch['sku_id'];
+                $html  .= '<tr>';
+                $html  .= '<td>' . esc_html($batch['id']) . '</td>';
+                $html  .= '<td>' . esc_html($batch['batch_no']) . '</td>';
+                $html  .= '<td>' . esc_html($sku_label) . '</td>';
+                $html  .= '<td>' . esc_html($batch['quantity']) . '</td>';
+                $html  .= '<td>' . esc_html($batch['notes']) . '</td>';
+                $html  .= '<td>' . esc_html($batch['generated_by']) . '</td>';
+                $html  .= '<td>' . esc_html($batch['created_at']) . '</td>';
+                $html  .= '</tr>';
+            }
+        } else {
+            $html .= '<tr><td colspan="7">' . esc_html__('No batches found.', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';

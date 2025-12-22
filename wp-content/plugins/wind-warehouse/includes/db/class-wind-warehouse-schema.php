@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
 }
 
 class Wind_Warehouse_Schema {
-    const SCHEMA_VERSION = '1.0.2';
+    const SCHEMA_VERSION = '1.0.4';
     const OPTION_NAME = 'wh_schema_version';
 
     public static function maybe_upgrade_schema(): void {
@@ -51,11 +51,18 @@ class Wind_Warehouse_Schema {
         $tables[] = "CREATE TABLE {$wpdb->prefix}wh_code_batches (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             batch_no varchar(191) NOT NULL,
-            sku_id bigint(20) unsigned DEFAULT NULL,
-            quantity int(11) unsigned DEFAULT NULL,
+            sku_id bigint(20) unsigned NOT NULL,
+            quantity int(11) unsigned NOT NULL DEFAULT 0,
+            qty int(11) unsigned DEFAULT NULL,
+            note varchar(255) DEFAULT NULL,
+            status varchar(20) NOT NULL DEFAULT 'created',
+            created_by bigint(20) unsigned DEFAULT NULL,
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
-            UNIQUE KEY batch_no (batch_no)
+            UNIQUE KEY batch_no (batch_no),
+            KEY sku_id (sku_id),
+            KEY status (status),
+            KEY created_by (created_by)
         ) $charset_collate;";
 
         $tables[] = "CREATE TABLE {$wpdb->prefix}wh_codes (

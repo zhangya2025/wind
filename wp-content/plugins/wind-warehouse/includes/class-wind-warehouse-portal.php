@@ -273,6 +273,50 @@ final class Wind_Warehouse_Portal {
         exit;
     }
 
+    private static function handle_toggle_sku(): ?string {
+        $sku_id = isset($_POST['sku_id']) ? absint($_POST['sku_id']) : 0;
+
+        if ($sku_id <= 0) {
+            return __('Invalid request. Please try again.', 'wind-warehouse');
+        }
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_skus_toggle_' . $sku_id)) {
+            return __('Invalid request. Please try again.', 'wind-warehouse');
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'wh_skus';
+
+        $current_status = $wpdb->get_var(
+            $wpdb->prepare("SELECT status FROM {$table} WHERE id = %d", $sku_id)
+        );
+
+        if ($current_status === null) {
+            return __('SKU not found.', 'wind-warehouse');
+        }
+
+        $new_status = $current_status === 'active' ? 'disabled' : 'active';
+
+        $updated = $wpdb->update(
+            $table,
+            [
+                'status'     => $new_status,
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $sku_id],
+            ['%s', '%s'],
+            ['%d']
+        );
+
+        if ($updated === false) {
+            return __('Could not update SKU. Please try again.', 'wind-warehouse');
+        }
+
+        $redirect_url = add_query_arg('wh', 'skus', self::portal_url());
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
+
     private static function render_skus_view(?string $error_message): string {
         global $wpdb;
         $table = $wpdb->prefix . 'wh_skus';
@@ -311,6 +355,7 @@ final class Wind_Warehouse_Portal {
         $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Actions', 'wind-warehouse') . '</th>';
         $html .= '</tr></thead>';
         $html .= '<tbody>';
 
@@ -323,10 +368,19 @@ final class Wind_Warehouse_Portal {
                 $html .= '<td>' . esc_html($sku['status']) . '</td>';
                 $html .= '<td>' . esc_html($sku['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($sku['updated_at']) . '</td>';
+                $html .= '<td>';
+                $html .= '<form method="post" action="' . esc_url($form_action) . '" style="display:inline">';
+                $html .= '<input type="hidden" name="ww_action" value="toggle_status" />';
+                $html .= '<input type="hidden" name="sku_id" value="' . esc_attr($sku['id']) . '" />';
+                $html .= wp_nonce_field('ww_skus_toggle_' . $sku['id'], 'ww_nonce', true, false);
+                $button_label = $sku['status'] === 'active' ? esc_html__('Disable', 'wind-warehouse') : esc_html__('Enable', 'wind-warehouse');
+                $html .= '<button type="submit">' . $button_label . '</button>';
+                $html .= '</form>';
+                $html .= '</td>';
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="6">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="7">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';

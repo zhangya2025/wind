@@ -437,6 +437,7 @@ final class Wind_Warehouse_Portal {
         $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Actions', 'wind-warehouse') . '</th>';
         $html .= '</tr></thead>';
         $html .= '<tbody>';
 
@@ -449,10 +450,19 @@ final class Wind_Warehouse_Portal {
                 $html .= '<td>' . esc_html($sku['status']) . '</td>';
                 $html .= '<td>' . esc_html($sku['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($sku['updated_at']) . '</td>';
+                $html .= '<td>';
+                $html .= '<form method="post" action="' . esc_url($form_action) . '" style="display:inline">';
+                $html .= '<input type="hidden" name="ww_action" value="toggle_status" />';
+                $html .= '<input type="hidden" name="sku_id" value="' . esc_attr($sku['id']) . '" />';
+                $html .= wp_nonce_field('ww_skus_toggle_' . $sku['id'], 'ww_nonce', true, false);
+                $button_label = $sku['status'] === 'active' ? esc_html__('Disable', 'wind-warehouse') : esc_html__('Enable', 'wind-warehouse');
+                $html .= '<button type="submit">' . $button_label . '</button>';
+                $html .= '</form>';
+                $html .= '</td>';
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="6">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="7">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';

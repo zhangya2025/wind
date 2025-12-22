@@ -145,7 +145,9 @@ final class Wind_Warehouse_Plugin {
             return;
         }
 
-        wp_safe_redirect(Wind_Warehouse_Portal::portal_url());
+        $portal_url = Wind_Warehouse_Portal::portal_url();
+
+        wp_safe_redirect($portal_url);
         exit;
     }
 
@@ -166,7 +168,9 @@ final class Wind_Warehouse_Plugin {
             return $redirect_to;
         }
 
-        return Wind_Warehouse_Portal::portal_url();
+        $portal_url = Wind_Warehouse_Portal::portal_url();
+
+        return $portal_url;
     }
 
     private static function user_is_target_role(WP_User $user): bool {

@@ -214,10 +214,6 @@ final class Wind_Warehouse_Portal {
             return self::handle_add_sku();
         }
 
-        if ($action === 'toggle_status') {
-            return self::handle_toggle_sku();
-        }
-
         return __('Invalid request. Please try again.', 'wind-warehouse');
     }
 
@@ -233,8 +229,24 @@ final class Wind_Warehouse_Portal {
             return __('SKU code and name are required.', 'wind-warehouse');
         }
 
+        if (strlen($sku_code) > 191) {
+            return __('SKU code must be 191 characters or fewer.', 'wind-warehouse');
+        }
+
+        if (strlen($name) > 255) {
+            return __('Name must be 255 characters or fewer.', 'wind-warehouse');
+        }
+
         global $wpdb;
         $table = $wpdb->prefix . 'wh_skus';
+
+        $existing_id = $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$table} WHERE sku_code = %s LIMIT 1", $sku_code)
+        );
+
+        if ($existing_id !== null) {
+            return __('SKU code already exists.', 'wind-warehouse');
+        }
 
         $data = [
             'sku_code'   => $sku_code,
@@ -247,14 +259,16 @@ final class Wind_Warehouse_Portal {
         $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s']);
 
         if ($inserted === false) {
-            if (stripos($wpdb->last_error, 'duplicate') !== false) {
-                return __('SKU code already exists.', 'wind-warehouse');
-            }
-
             return __('Could not create SKU. Please try again.', 'wind-warehouse');
         }
 
-        $redirect_url = add_query_arg('wh', 'skus', self::portal_url());
+        $redirect_url = add_query_arg(
+            [
+                'wh'  => 'skus',
+                'msg' => 'created',
+            ],
+            self::portal_url()
+        );
         wp_safe_redirect($redirect_url);
         exit;
     }

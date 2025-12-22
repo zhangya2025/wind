@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
 }
 
 class Wind_Warehouse_Schema {
-    const SCHEMA_VERSION = '1.0.1';
+    const SCHEMA_VERSION = '1.0.2';
     const OPTION_NAME = 'wh_schema_version';
 
     public static function maybe_upgrade_schema(): void {
@@ -40,8 +40,8 @@ class Wind_Warehouse_Schema {
         $tables[] = "CREATE TABLE {$wpdb->prefix}wh_dealers (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             dealer_code varchar(191) NOT NULL,
-            name varchar(255) NOT NULL DEFAULT '',
-            status varchar(50) NOT NULL DEFAULT 'active',
+            name varchar(255) NOT NULL,
+            status varchar(20) NOT NULL DEFAULT 'active',
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),

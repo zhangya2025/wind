@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Wind Warehouse
  * Description: Warehouse and anti-counterfeit system bootstrap with schema management, roles, wp-admin isolation, and login redirects.
- * Version: 0.2.0
+ * Version: 1.1.0
  */
 
 if (!defined('ABSPATH')) {

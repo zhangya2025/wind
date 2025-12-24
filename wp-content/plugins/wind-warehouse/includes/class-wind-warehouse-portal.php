@@ -508,19 +508,34 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Invalid request. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
         }
 
-        $sku_code = isset($_POST['sku_code']) ? sanitize_text_field(wp_unslash($_POST['sku_code'])) : '';
-        $name     = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
+        $sku_code = isset($_POST['sku_code']) ? trim(sanitize_text_field(wp_unslash($_POST['sku_code']))) : '';
+        $name     = isset($_POST['name']) ? trim(sanitize_text_field(wp_unslash($_POST['name']))) : '';
+        $color    = isset($_POST['color']) ? trim(sanitize_text_field(wp_unslash($_POST['color']))) : '';
+        $size     = isset($_POST['size']) ? trim(sanitize_text_field(wp_unslash($_POST['size']))) : '';
+        $summary  = isset($_POST['summary']) ? trim(sanitize_text_field(wp_unslash($_POST['summary']))) : '';
 
         if ($sku_code === '' || $name === '') {
             wp_die(__('SKU code and name are required.', 'wind-warehouse'), '', ['response' => 400]);
         }
 
-        if (strlen($sku_code) > 191) {
-            wp_die(__('SKU code must be 191 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        if (strlen($sku_code) !== 13 || !ctype_digit($sku_code)) {
+            wp_die(__('SKU code must be a 13-digit number.', 'wind-warehouse'), '', ['response' => 400]);
         }
 
         if (strlen($name) > 255) {
             wp_die(__('Name must be 255 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if ($color !== '' && strlen($color) > 50) {
+            wp_die(__('Color must be 50 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if ($size !== '' && strlen($size) > 50) {
+            wp_die(__('Size must be 50 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if ($summary !== '' && strlen($summary) > 255) {
+            wp_die(__('Summary must be 255 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
         }
 
         global $wpdb;
@@ -537,12 +552,15 @@ final class Wind_Warehouse_Portal {
         $data = [
             'sku_code'   => $sku_code,
             'name'       => $name,
+            'color'      => $color !== '' ? $color : null,
+            'size'       => $size !== '' ? $size : null,
+            'summary'    => $summary !== '' ? $summary : null,
             'status'     => 'active',
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql'),
         ];
 
-        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s']);
+        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']);
 
         if ($inserted === false) {
             wp_die(__('Could not create SKU. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
@@ -565,19 +583,34 @@ final class Wind_Warehouse_Portal {
             return __('Invalid request. Please try again.', 'wind-warehouse');
         }
 
-        $sku_code = isset($_POST['sku_code']) ? sanitize_text_field(wp_unslash($_POST['sku_code'])) : '';
-        $name     = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
+        $sku_code = isset($_POST['sku_code']) ? trim(sanitize_text_field(wp_unslash($_POST['sku_code']))) : '';
+        $name     = isset($_POST['name']) ? trim(sanitize_text_field(wp_unslash($_POST['name']))) : '';
+        $color    = isset($_POST['color']) ? trim(sanitize_text_field(wp_unslash($_POST['color']))) : '';
+        $size     = isset($_POST['size']) ? trim(sanitize_text_field(wp_unslash($_POST['size']))) : '';
+        $summary  = isset($_POST['summary']) ? trim(sanitize_text_field(wp_unslash($_POST['summary']))) : '';
 
         if ($sku_code === '' || $name === '') {
             return __('SKU code and name are required.', 'wind-warehouse');
         }
 
-        if (strlen($sku_code) > 191) {
-            return __('SKU code must be 191 characters or fewer.', 'wind-warehouse');
+        if (strlen($sku_code) !== 13 || !ctype_digit($sku_code)) {
+            return __('SKU code must be a 13-digit number.', 'wind-warehouse');
         }
 
         if (strlen($name) > 255) {
             return __('Name must be 255 characters or fewer.', 'wind-warehouse');
+        }
+
+        if ($color !== '' && strlen($color) > 50) {
+            return __('Color must be 50 characters or fewer.', 'wind-warehouse');
+        }
+
+        if ($size !== '' && strlen($size) > 50) {
+            return __('Size must be 50 characters or fewer.', 'wind-warehouse');
+        }
+
+        if ($summary !== '' && strlen($summary) > 255) {
+            return __('Summary must be 255 characters or fewer.', 'wind-warehouse');
         }
 
         global $wpdb;
@@ -594,12 +627,15 @@ final class Wind_Warehouse_Portal {
         $data = [
             'sku_code'   => $sku_code,
             'name'       => $name,
+            'color'      => $color !== '' ? $color : null,
+            'size'       => $size !== '' ? $size : null,
+            'summary'    => $summary !== '' ? $summary : null,
             'status'     => 'active',
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql'),
         ];
 
-        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s']);
+        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']);
 
         if ($inserted === false) {
             return __('Could not create SKU. Please try again.', 'wind-warehouse');
@@ -757,7 +793,7 @@ final class Wind_Warehouse_Portal {
 
         $skus = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT id, sku_code, name, status, created_at, updated_at FROM {$table} ORDER BY id DESC LIMIT %d",
+                "SELECT id, sku_code, name, color, size, summary, status, created_at, updated_at FROM {$table} ORDER BY id DESC LIMIT %d",
                 50
             ),
             ARRAY_A
@@ -776,9 +812,15 @@ final class Wind_Warehouse_Portal {
         $html .= '<form method="post" action="' . esc_url($form_action) . '">';
         $html .= '<h2>' . esc_html__('Add SKU', 'wind-warehouse') . '</h2>';
         $html .= '<p><label>' . esc_html__('SKU Code', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="sku_code" required /></label></p>';
+        $html .= '<input type="text" name="sku_code" required maxlength="13" /></label></p>';
         $html .= '<p><label>' . esc_html__('Name', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="name" required /></label></p>';
+        $html .= '<input type="text" name="name" required maxlength="255" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Color (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="color" maxlength="50" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Size (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="size" maxlength="50" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Summary (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="summary" maxlength="255" /></label></p>';
         $html .= '<input type="hidden" name="action" value="ww_add_sku" />';
         $html .= wp_nonce_field('ww_skus_add', 'ww_nonce', true, false);
         $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
@@ -790,6 +832,9 @@ final class Wind_Warehouse_Portal {
         $html .= '<th>' . esc_html__('ID', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('SKU Code', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Name', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Color', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Size', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Summary', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
@@ -803,6 +848,12 @@ final class Wind_Warehouse_Portal {
                 $html .= '<td>' . esc_html($sku['id']) . '</td>';
                 $html .= '<td>' . esc_html($sku['sku_code']) . '</td>';
                 $html .= '<td>' . esc_html($sku['name']) . '</td>';
+                $html .= '<td>' . esc_html($sku['color'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html($sku['size'] ?? '') . '</td>';
+
+                $summary_text = isset($sku['summary']) ? (string) $sku['summary'] : '';
+                $display_summary = $summary_text !== '' ? wp_html_excerpt($summary_text, 50, '…') : '';
+                $html .= '<td>' . esc_html($display_summary) . '</td>';
                 $html .= '<td>' . esc_html($sku['status']) . '</td>';
                 $html .= '<td>' . esc_html($sku['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($sku['updated_at']) . '</td>';
@@ -818,7 +869,7 @@ final class Wind_Warehouse_Portal {
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="7">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="10">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';
@@ -913,7 +964,7 @@ final class Wind_Warehouse_Portal {
 
         $skus = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT id, sku_code FROM {$sku_table} WHERE status = %s ORDER BY id DESC LIMIT %d",
+                "SELECT id, sku_code, name, color, size FROM {$sku_table} WHERE status = %s ORDER BY id DESC LIMIT %d",
                 'active',
                 100
             ),
@@ -948,7 +999,21 @@ final class Wind_Warehouse_Portal {
             $html .= '<p><label>' . esc_html__('SKU', 'wind-warehouse') . '<br />';
             $html .= '<select name="sku_id" required>';
             foreach ($skus as $sku) {
-                $html .= '<option value="' . esc_attr($sku['id']) . '">' . esc_html($sku['sku_code']) . '</option>';
+                $label = $sku['sku_code'] . ' - ' . $sku['name'];
+
+                $suffix_parts = [];
+                if (!empty($sku['color'])) {
+                    $suffix_parts[] = $sku['color'];
+                }
+                if (!empty($sku['size'])) {
+                    $suffix_parts[] = $sku['size'];
+                }
+
+                if (!empty($suffix_parts)) {
+                    $label .= ' / ' . implode(' ', $suffix_parts);
+                }
+
+                $html .= '<option value="' . esc_attr($sku['id']) . '">' . esc_html($label) . '</option>';
             }
             $html .= '</select></label></p>';
 

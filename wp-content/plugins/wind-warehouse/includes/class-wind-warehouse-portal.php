@@ -238,6 +238,61 @@ final class Wind_Warehouse_Portal {
             return self::handle_add_sku();
         }
 
+        if ($action === 'toggle_status') {
+            if (!self::user_can_access_view('skus', $user)) {
+                return __('Forbidden', 'wind-warehouse');
+            }
+
+            $sku_id = isset($_POST['sku_id']) ? absint($_POST['sku_id']) : 0;
+
+            if ($sku_id < 1) {
+                return __('Invalid request. Please try again.', 'wind-warehouse');
+            }
+
+            if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_skus_toggle_' . $sku_id)) {
+                return __('Invalid request. Please try again.', 'wind-warehouse');
+            }
+
+            global $wpdb;
+            $table = $wpdb->prefix . 'wh_skus';
+
+            $current_status = $wpdb->get_var(
+                $wpdb->prepare("SELECT status FROM {$table} WHERE id = %d", $sku_id)
+            );
+
+            if ($current_status === null) {
+                return __('Invalid request. Please try again.', 'wind-warehouse');
+            }
+
+            $target_status = ($current_status === 'active') ? 'disabled' : 'active';
+
+            $updated = $wpdb->update(
+                $table,
+                [
+                    'status'     => $target_status,
+                    'updated_at' => current_time('mysql'),
+                ],
+                ['id' => $sku_id],
+                ['%s', '%s'],
+                ['%d']
+            );
+
+            if ($updated === false) {
+                return __('Could not update SKU. Please try again.', 'wind-warehouse');
+            }
+
+            $redirect_url = add_query_arg(
+                [
+                    'wh'  => 'skus',
+                    'msg' => $target_status === 'active' ? 'enabled' : 'disabled',
+                ],
+                self::portal_url()
+            );
+
+            wp_safe_redirect($redirect_url);
+            exit;
+        }
+
         return __('Invalid request. Please try again.', 'wind-warehouse');
     }
 
@@ -688,6 +743,18 @@ final class Wind_Warehouse_Portal {
         global $wpdb;
         $table = $wpdb->prefix . 'wh_skus';
 
+        $success_message = '';
+        if (isset($_GET['msg'])) {
+            $msg = sanitize_text_field(wp_unslash($_GET['msg']));
+            if ($msg === 'enabled') {
+                $success_message = __('SKU enabled.', 'wind-warehouse');
+            } elseif ($msg === 'disabled') {
+                $success_message = __('SKU disabled.', 'wind-warehouse');
+            } elseif ($msg === 'created') {
+                $success_message = __('SKU created.', 'wind-warehouse');
+            }
+        }
+
         $skus = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT id, sku_code, name, status, created_at, updated_at FROM {$table} ORDER BY id DESC LIMIT %d",
@@ -700,6 +767,9 @@ final class Wind_Warehouse_Portal {
         $toggle_action = self::portal_url();
 
         $html  = '<div class="ww-skus">';
+        if ($success_message !== '') {
+            $html .= '<div class="notice notice-success"><p>' . esc_html($success_message) . '</p></div>';
+        }
         if ($error_message !== null) {
             $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
         }

@@ -4,13 +4,14 @@ if (!defined('ABSPATH')) {
 }
 
 class Wind_Warehouse_Schema {
-    const SCHEMA_VERSION = '1.2.0';
+    const SCHEMA_VERSION = '1.3.0';
     const OPTION_NAME = 'wh_schema_version';
 
     public static function maybe_upgrade_schema(): void {
         $installed_version = get_option(self::OPTION_NAME);
 
         if ($installed_version === self::SCHEMA_VERSION) {
+            self::ensure_hq_dealer();
             return;
         }
 
@@ -69,11 +70,20 @@ class Wind_Warehouse_Schema {
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             dealer_code varchar(191) NOT NULL,
             name varchar(255) NOT NULL,
+            phone varchar(50) DEFAULT NULL,
+            address varchar(255) DEFAULT NULL,
+            contact_name varchar(100) DEFAULT NULL,
+            intro varchar(255) DEFAULT NULL,
+            authorized_from date DEFAULT NULL,
+            authorized_to date DEFAULT NULL,
+            business_license_attachment_id bigint(20) unsigned DEFAULT NULL,
+            authorization_letter_attachment_id bigint(20) unsigned DEFAULT NULL,
             status varchar(20) NOT NULL DEFAULT 'active',
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY  (id),
-            UNIQUE KEY dealer_code (dealer_code)
+            UNIQUE KEY dealer_code (dealer_code),
+            KEY status (status)
         ) $charset_collate;";
 
         $tables[] = "CREATE TABLE {$wpdb->prefix}wh_code_batches (
@@ -164,5 +174,82 @@ class Wind_Warehouse_Schema {
         ) $charset_collate;";
 
         dbDelta($tables);
+
+        self::maybe_add_missing_dealer_columns();
+        self::maybe_add_dealer_indexes();
+        self::ensure_hq_dealer();
+    }
+
+    private static function maybe_add_missing_dealer_columns(): void {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'wh_dealers';
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+
+        $target_columns = [
+            'phone'                              => "ALTER TABLE {$table} ADD COLUMN phone varchar(50) DEFAULT NULL",
+            'address'                            => "ALTER TABLE {$table} ADD COLUMN address varchar(255) DEFAULT NULL",
+            'contact_name'                       => "ALTER TABLE {$table} ADD COLUMN contact_name varchar(100) DEFAULT NULL",
+            'intro'                              => "ALTER TABLE {$table} ADD COLUMN intro varchar(255) DEFAULT NULL",
+            'authorized_from'                    => "ALTER TABLE {$table} ADD COLUMN authorized_from date DEFAULT NULL",
+            'authorized_to'                      => "ALTER TABLE {$table} ADD COLUMN authorized_to date DEFAULT NULL",
+            'business_license_attachment_id'     => "ALTER TABLE {$table} ADD COLUMN business_license_attachment_id bigint(20) unsigned DEFAULT NULL",
+            'authorization_letter_attachment_id' => "ALTER TABLE {$table} ADD COLUMN authorization_letter_attachment_id bigint(20) unsigned DEFAULT NULL",
+        ];
+
+        foreach ($target_columns as $column => $statement) {
+            if (!in_array($column, $columns, true)) {
+                $wpdb->query($statement);
+            }
+        }
+    }
+
+    private static function maybe_add_dealer_indexes(): void {
+        global $wpdb;
+
+        $table  = $wpdb->prefix . 'wh_dealers';
+        $indexes = $wpdb->get_results("SHOW INDEX FROM {$table}", ARRAY_A);
+
+        $index_names = array_map(
+            static function (array $index_row): string {
+                return (string) $index_row['Key_name'];
+            },
+            $indexes
+        );
+
+        if (!in_array('status', $index_names, true)) {
+            $wpdb->query("ALTER TABLE {$table} ADD INDEX status (status)");
+        }
+
+        if (!in_array('dealer_code', $index_names, true)) {
+            $wpdb->query("ALTER TABLE {$table} ADD UNIQUE KEY dealer_code (dealer_code)");
+        }
+    }
+
+    public static function ensure_hq_dealer(): void {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'wh_dealers';
+        $hq_id = $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$table} WHERE dealer_code = %s LIMIT 1", 'HQ')
+        );
+
+        if ($hq_id !== null) {
+            return;
+        }
+
+        $now = current_time('mysql');
+
+        $wpdb->insert(
+            $table,
+            [
+                'dealer_code' => 'HQ',
+                'name'        => '总部销售',
+                'status'      => 'active',
+                'created_at'  => $now,
+                'updated_at'  => $now,
+            ],
+            ['%s', '%s', '%s', '%s', '%s']
+        );
     }
 }

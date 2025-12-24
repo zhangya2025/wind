@@ -57,6 +57,7 @@ final class Wind_Warehouse_Plugin {
         Wind_Warehouse_Schema::maybe_upgrade_schema();
         self::ensure_roles();
         Wind_Warehouse_Portal::ensure_portal_page(true);
+        Wind_Warehouse_Schema::ensure_hq_dealer();
     }
 
     public static function on_deactivation(): void {

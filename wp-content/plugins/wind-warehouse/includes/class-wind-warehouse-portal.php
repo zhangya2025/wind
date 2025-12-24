@@ -9,6 +9,7 @@ final class Wind_Warehouse_Portal {
     private const SHORTCODE = 'wind_warehouse_portal';
     private const PAGE_SLUG = 'warehouse';
     private const TITLE = 'Wind Warehouse Portal';
+    private const HQ_DEALER_CODE = 'HQ';
 
     public static function register_shortcode(): void {
         add_shortcode(self::SHORTCODE, [self::class, 'render_portal']);
@@ -465,6 +466,18 @@ final class Wind_Warehouse_Portal {
             global $wpdb;
             $table = $wpdb->prefix . 'wh_dealers';
 
+            $dealer_code = $wpdb->get_var(
+                $wpdb->prepare("SELECT dealer_code FROM {$table} WHERE id = %d", $dealer_id)
+            );
+
+            if ($dealer_code === null) {
+                return __('Invalid request. Please try again.', 'wind-warehouse');
+            }
+
+            if ($dealer_code === self::HQ_DEALER_CODE && $target_status === 'disabled') {
+                return __('HQ dealer cannot be disabled.', 'wind-warehouse');
+            }
+
             $updated = $wpdb->update(
                 $table,
                 [
@@ -657,26 +670,18 @@ final class Wind_Warehouse_Portal {
             return __('Invalid request. Please try again.', 'wind-warehouse');
         }
 
-        $dealer_code = isset($_POST['dealer_code']) ? sanitize_text_field(wp_unslash($_POST['dealer_code'])) : '';
-        $name        = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
+        $input_data = self::collect_dealer_input();
+        $validation_error = self::validate_dealer_input($input_data);
 
-        if ($dealer_code === '' || $name === '') {
-            return __('Dealer code and name are required.', 'wind-warehouse');
-        }
-
-        if (strlen($dealer_code) > 191) {
-            return __('Dealer code must be 191 characters or fewer.', 'wind-warehouse');
-        }
-
-        if (strlen($name) > 255) {
-            return __('Name must be 255 characters or fewer.', 'wind-warehouse');
+        if ($validation_error !== null) {
+            return $validation_error;
         }
 
         global $wpdb;
         $table = $wpdb->prefix . 'wh_dealers';
 
         $existing_id = $wpdb->get_var(
-            $wpdb->prepare("SELECT id FROM {$table} WHERE dealer_code = %s LIMIT 1", $dealer_code)
+            $wpdb->prepare("SELECT id FROM {$table} WHERE dealer_code = %s LIMIT 1", $input_data['dealer_code'])
         );
 
         if ($existing_id !== null) {
@@ -685,14 +690,40 @@ final class Wind_Warehouse_Portal {
 
         $now = current_time('mysql');
         $data = [
-            'dealer_code' => $dealer_code,
-            'name'        => $name,
+            'dealer_code' => $input_data['dealer_code'],
+            'name'        => $input_data['name'],
+            'phone'       => $input_data['phone'],
+            'address'     => $input_data['address'],
+            'contact_name'=> $input_data['contact_name'],
+            'intro'       => $input_data['intro'],
+            'authorized_from' => $input_data['authorized_from'],
+            'authorized_to'   => $input_data['authorized_to'],
+            'business_license_attachment_id'     => $input_data['business_license_attachment_id'],
+            'authorization_letter_attachment_id' => $input_data['authorization_letter_attachment_id'],
             'status'      => 'active',
             'created_at'  => $now,
             'updated_at'  => $now,
         ];
 
-        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s']);
+        $inserted = $wpdb->insert(
+            $table,
+            $data,
+            [
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+            ]
+        );
 
         if ($inserted === false) {
             return __('Could not create dealer. Please try again.', 'wind-warehouse');
@@ -722,26 +753,18 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Invalid request. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
         }
 
-        $dealer_code = isset($_POST['dealer_code']) ? sanitize_text_field(wp_unslash($_POST['dealer_code'])) : '';
-        $name        = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
+        $input_data = self::collect_dealer_input();
+        $validation_error = self::validate_dealer_input($input_data);
 
-        if ($dealer_code === '' || $name === '') {
-            wp_die(__('Dealer code and name are required.', 'wind-warehouse'), '', ['response' => 400]);
-        }
-
-        if (strlen($dealer_code) > 191) {
-            wp_die(__('Dealer code must be 191 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
-        }
-
-        if (strlen($name) > 255) {
-            wp_die(__('Name must be 255 characters or fewer.', 'wind-warehouse'), '', ['response' => 400]);
+        if ($validation_error !== null) {
+            wp_die($validation_error, '', ['response' => 400]);
         }
 
         global $wpdb;
         $table = $wpdb->prefix . 'wh_dealers';
 
         $existing_id = $wpdb->get_var(
-            $wpdb->prepare("SELECT id FROM {$table} WHERE dealer_code = %s LIMIT 1", $dealer_code)
+            $wpdb->prepare("SELECT id FROM {$table} WHERE dealer_code = %s LIMIT 1", $input_data['dealer_code'])
         );
 
         if ($existing_id !== null) {
@@ -750,14 +773,40 @@ final class Wind_Warehouse_Portal {
 
         $now = current_time('mysql');
         $data = [
-            'dealer_code' => $dealer_code,
-            'name'        => $name,
+            'dealer_code' => $input_data['dealer_code'],
+            'name'        => $input_data['name'],
+            'phone'       => $input_data['phone'],
+            'address'     => $input_data['address'],
+            'contact_name'=> $input_data['contact_name'],
+            'intro'       => $input_data['intro'],
+            'authorized_from' => $input_data['authorized_from'],
+            'authorized_to'   => $input_data['authorized_to'],
+            'business_license_attachment_id'     => $input_data['business_license_attachment_id'],
+            'authorization_letter_attachment_id' => $input_data['authorization_letter_attachment_id'],
             'status'      => 'active',
             'created_at'  => $now,
             'updated_at'  => $now,
         ];
 
-        $inserted = $wpdb->insert($table, $data, ['%s', '%s', '%s', '%s', '%s']);
+        $inserted = $wpdb->insert(
+            $table,
+            $data,
+            [
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+            ]
+        );
 
         if ($inserted === false) {
             wp_die(__('Could not create dealer. Please try again.', 'wind-warehouse'), '', ['response' => 400]);
@@ -773,6 +822,127 @@ final class Wind_Warehouse_Portal {
 
         wp_safe_redirect($redirect_url);
         exit;
+    }
+
+    private static function collect_dealer_input(): array {
+        return [
+            'dealer_code'                        => isset($_POST['dealer_code']) ? sanitize_text_field(wp_unslash($_POST['dealer_code'])) : '',
+            'name'                               => isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '',
+            'phone'                              => isset($_POST['phone']) ? sanitize_text_field(wp_unslash($_POST['phone'])) : '',
+            'address'                            => isset($_POST['address']) ? sanitize_text_field(wp_unslash($_POST['address'])) : '',
+            'contact_name'                       => isset($_POST['contact_name']) ? sanitize_text_field(wp_unslash($_POST['contact_name'])) : '',
+            'intro'                              => isset($_POST['intro']) ? sanitize_text_field(wp_unslash($_POST['intro'])) : '',
+            'authorized_from'                    => isset($_POST['authorized_from']) ? sanitize_text_field(wp_unslash($_POST['authorized_from'])) : '',
+            'authorized_to'                      => isset($_POST['authorized_to']) ? sanitize_text_field(wp_unslash($_POST['authorized_to'])) : '',
+            'business_license_attachment_id'     => isset($_POST['business_license_attachment_id']) ? sanitize_text_field(wp_unslash($_POST['business_license_attachment_id'])) : '',
+            'authorization_letter_attachment_id' => isset($_POST['authorization_letter_attachment_id']) ? sanitize_text_field(wp_unslash($_POST['authorization_letter_attachment_id'])) : '',
+        ];
+    }
+
+    private static function validate_dealer_input(array &$data): ?string {
+        if ($data['dealer_code'] === '' || $data['name'] === '') {
+            return __('Dealer code and name are required.', 'wind-warehouse');
+        }
+
+        if (strlen($data['dealer_code']) > 191) {
+            return __('Dealer code must be 191 characters or fewer.', 'wind-warehouse');
+        }
+
+        if (strlen($data['name']) > 255) {
+            return __('Name must be 255 characters or fewer.', 'wind-warehouse');
+        }
+
+        if ($data['phone'] !== '' && strlen($data['phone']) > 50) {
+            return __('Phone must be 50 characters or fewer.', 'wind-warehouse');
+        }
+
+        if ($data['contact_name'] !== '' && strlen($data['contact_name']) > 100) {
+            return __('Contact name must be 100 characters or fewer.', 'wind-warehouse');
+        }
+
+        if ($data['address'] !== '' && strlen($data['address']) > 255) {
+            return __('Address must be 255 characters or fewer.', 'wind-warehouse');
+        }
+
+        if ($data['intro'] !== '' && strlen($data['intro']) > 255) {
+            return __('Intro must be 255 characters or fewer.', 'wind-warehouse');
+        }
+
+        $authorized_from = self::normalize_date($data['authorized_from']);
+        $authorized_to   = self::normalize_date($data['authorized_to']);
+
+        if ($data['authorized_from'] !== '' && $authorized_from === null) {
+            return __('Authorized from date is invalid. Use YYYY-MM-DD.', 'wind-warehouse');
+        }
+
+        if ($data['authorized_to'] !== '' && $authorized_to === null) {
+            return __('Authorized to date is invalid. Use YYYY-MM-DD.', 'wind-warehouse');
+        }
+
+        if ($authorized_from !== null && $authorized_to !== null) {
+            if (strtotime($authorized_from) > strtotime($authorized_to)) {
+                return __('Authorized from date must be earlier than or equal to authorized to date.', 'wind-warehouse');
+            }
+        }
+
+        $data['authorized_from'] = $authorized_from;
+        $data['authorized_to']   = $authorized_to;
+
+        $business_attachment = $data['business_license_attachment_id'];
+        $authorization_attachment = $data['authorization_letter_attachment_id'];
+
+        $data['business_license_attachment_id'] = ($business_attachment === '' || $business_attachment === '0') ? null : absint($business_attachment);
+        if ($business_attachment !== '' && $business_attachment !== '0' && $data['business_license_attachment_id'] < 1) {
+            return __('Business license attachment ID must be a positive integer.', 'wind-warehouse');
+        }
+
+        $data['authorization_letter_attachment_id'] = ($authorization_attachment === '' || $authorization_attachment === '0') ? null : absint($authorization_attachment);
+        if ($authorization_attachment !== '' && $authorization_attachment !== '0' && $data['authorization_letter_attachment_id'] < 1) {
+            return __('Authorization letter attachment ID must be a positive integer.', 'wind-warehouse');
+        }
+
+        $data['phone']        = $data['phone'] !== '' ? $data['phone'] : null;
+        $data['address']      = $data['address'] !== '' ? $data['address'] : null;
+        $data['contact_name'] = $data['contact_name'] !== '' ? $data['contact_name'] : null;
+        $data['intro']        = $data['intro'] !== '' ? $data['intro'] : null;
+
+        return null;
+    }
+
+    private static function normalize_date(string $date): ?string {
+        $trimmed = trim($date);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $date_object = date_create_from_format('Y-m-d', $trimmed);
+
+        if (!$date_object || $date_object->format('Y-m-d') !== $trimmed) {
+            return null;
+        }
+
+        return $trimmed;
+    }
+
+    private static function dealer_is_available(array $dealer): bool {
+        if (!isset($dealer['status']) || $dealer['status'] !== 'active') {
+            return false;
+        }
+
+        if (empty($dealer['authorized_from']) || empty($dealer['authorized_to'])) {
+            return false;
+        }
+
+        $from_ts    = strtotime($dealer['authorized_from']);
+        $to_ts      = strtotime($dealer['authorized_to']);
+        $current_ts = strtotime(date('Y-m-d', current_time('timestamp')));
+
+        if ($from_ts === false || $to_ts === false || $current_ts === false) {
+            return false;
+        }
+
+        return $current_ts >= $from_ts && $current_ts <= $to_ts;
     }
 
     private static function render_skus_view(?string $error_message): string {
@@ -884,14 +1054,18 @@ final class Wind_Warehouse_Portal {
 
         $dealers = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT id, dealer_code, name, status, created_at, updated_at FROM {$table} ORDER BY id DESC LIMIT %d",
+                "SELECT id, dealer_code, name, phone, address, contact_name, intro, authorized_from, authorized_to, business_license_attachment_id, authorization_letter_attachment_id, status, created_at, updated_at FROM {$table} ORDER BY id DESC LIMIT %d",
                 50
             ),
             ARRAY_A
         );
 
-        $form_action   = self::portal_post_url('dealers');
+        $form_action   = add_query_arg('wh', 'dealers', self::portal_url());
         $toggle_action = $form_action;
+
+        if (function_exists('wp_enqueue_media')) {
+            wp_enqueue_media();
+        }
 
         $html  = '<div class="ww-dealers">';
         if ($error_message !== null) {
@@ -903,6 +1077,28 @@ final class Wind_Warehouse_Portal {
         $html .= '<input type="text" name="dealer_code" required /></label></p>';
         $html .= '<p><label>' . esc_html__('Name', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="name" required /></label></p>';
+        $html .= '<p><label>' . esc_html__('Phone (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="phone" maxlength="50" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Contact Name (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="contact_name" maxlength="100" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Address (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="address" maxlength="255" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Intro (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="intro" maxlength="255" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Authorized From (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="date" name="authorized_from" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Authorized To (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="date" name="authorized_to" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Business License (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="hidden" name="business_license_attachment_id" id="ww_business_license_attachment_id" />';
+        $html .= '<button type="button" class="button" id="ww_business_license_button">' . esc_html__('Select / Upload', 'wind-warehouse') . '</button> ';
+        $html .= '<button type="button" class="button" id="ww_business_license_remove">' . esc_html__('Remove', 'wind-warehouse') . '</button>';
+        $html .= '<div id="ww_business_license_preview" class="ww-media-preview"></div></label></p>';
+        $html .= '<p><label>' . esc_html__('Authorization Letter (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="hidden" name="authorization_letter_attachment_id" id="ww_authorization_letter_attachment_id" />';
+        $html .= '<button type="button" class="button" id="ww_authorization_letter_button">' . esc_html__('Select / Upload', 'wind-warehouse') . '</button> ';
+        $html .= '<button type="button" class="button" id="ww_authorization_letter_remove">' . esc_html__('Remove', 'wind-warehouse') . '</button>';
+        $html .= '<div id="ww_authorization_letter_preview" class="ww-media-preview"></div></label></p>';
         $html .= '<input type="hidden" name="ww_action" value="add_dealer" />';
         $html .= wp_nonce_field('ww_dealers_add', 'ww_nonce', true, false);
         $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
@@ -914,6 +1110,10 @@ final class Wind_Warehouse_Portal {
         $html .= '<th>' . esc_html__('ID', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Dealer Code', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Name', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Phone', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Authorized From', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Authorized To', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Available', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
@@ -923,10 +1123,15 @@ final class Wind_Warehouse_Portal {
 
         if (!empty($dealers)) {
             foreach ($dealers as $dealer) {
+                $available = self::dealer_is_available($dealer);
                 $html .= '<tr>';
                 $html .= '<td>' . esc_html($dealer['id']) . '</td>';
                 $html .= '<td>' . esc_html($dealer['dealer_code']) . '</td>';
                 $html .= '<td>' . esc_html($dealer['name']) . '</td>';
+                $html .= '<td>' . esc_html($dealer['phone'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html($dealer['authorized_from'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html($dealer['authorized_to'] ?? '') . '</td>';
+                $html .= '<td>' . ($available ? esc_html__('Yes', 'wind-warehouse') : esc_html__('No', 'wind-warehouse')) . '</td>';
                 $html .= '<td>' . esc_html($dealer['status']) . '</td>';
                 $html .= '<td>' . esc_html($dealer['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($dealer['updated_at']) . '</td>';
@@ -951,6 +1156,36 @@ final class Wind_Warehouse_Portal {
         }
 
         $html .= '</tbody></table>';
+        $html .= '<script type="text/javascript">(function(){\n';
+        $html .= 'function initMediaSelector(config){\n';
+        $html .= '  var input = document.getElementById(config.inputId);\n';
+        $html .= '  var button = document.getElementById(config.buttonId);\n';
+        $html .= '  var removeButton = document.getElementById(config.removeButtonId);\n';
+        $html .= '  var preview = document.getElementById(config.previewId);\n';
+        $html .= '  if(!input || !button || !removeButton || !preview || typeof wp === "undefined" || !wp.media){return;}\n';
+        $html .= '  var frame;\n';
+        $html .= '  button.addEventListener("click", function(){\n';
+        $html .= '    if(frame){frame.open();return;}\n';
+        $html .= '    frame = wp.media({title: config.title, button: {text: config.buttonText}, library: {type: "image"}, multiple: false});\n';
+        $html .= '    frame.on("select", function(){\n';
+        $html .= '      var attachment = frame.state().get("selection").first().toJSON();\n';
+        $html .= '      input.value = attachment.id;\n';
+        $html .= '      var previewUrl = attachment.url;\n';
+        $html .= '      if(attachment.sizes && attachment.sizes.thumbnail && attachment.sizes.thumbnail.url){\n';
+        $html .= '        previewUrl = attachment.sizes.thumbnail.url;\n';
+        $html .= '      }\n';
+        $html .= '      preview.innerHTML = "<img src=\\"" + previewUrl + "\\" alt=\\"" + config.previewAlt + "\\" style=\\"max-width:120px;height:auto;\\" />";\n';
+        $html .= '    });\n';
+        $html .= '    frame.open();\n';
+        $html .= '  });\n';
+        $html .= '  removeButton.addEventListener("click", function(){\n';
+        $html .= '    input.value = "";\n';
+        $html .= '    preview.innerHTML = "";\n';
+        $html .= '  });\n';
+        $html .= '}\n';
+        $html .= 'initMediaSelector({inputId:"ww_business_license_attachment_id", buttonId:"ww_business_license_button", removeButtonId:"ww_business_license_remove", previewId:"ww_business_license_preview", title:"' . esc_js(__('Select Business License', 'wind-warehouse')) . '", buttonText:"' . esc_js(__('Use this image', 'wind-warehouse')) . '", previewAlt:"' . esc_js(__('Business License Preview', 'wind-warehouse')) . '"});\n';
+        $html .= 'initMediaSelector({inputId:"ww_authorization_letter_attachment_id", buttonId:"ww_authorization_letter_button", removeButtonId:"ww_authorization_letter_remove", previewId:"ww_authorization_letter_preview", title:"' . esc_js(__('Select Authorization Letter', 'wind-warehouse')) . '", buttonText:"' . esc_js(__('Use this image', 'wind-warehouse')) . '", previewAlt:"' . esc_js(__('Authorization Letter Preview', 'wind-warehouse')) . '"});\n';
+        $html .= '})();</script>';
         $html .= '</div>';
 
         return $html;
@@ -983,7 +1218,7 @@ final class Wind_Warehouse_Portal {
             ARRAY_A
         );
 
-        $form_action = self::portal_post_url('generate');
+        $form_action = add_query_arg('wh', 'generate', self::portal_url());
 
         $html  = '<div class="ww-generate">';
         if ($error_message !== null) {

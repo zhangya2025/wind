@@ -475,7 +475,7 @@ final class Wind_Warehouse_Portal {
             }
 
             if ($dealer_code === self::HQ_DEALER_CODE && $target_status === 'disabled') {
-                return __('HQ Dealer cannot be disabled.', 'wind-warehouse');
+                return __('HQ dealer cannot be disabled.', 'wind-warehouse');
             }
 
             $updated = $wpdb->update(
@@ -891,13 +891,13 @@ final class Wind_Warehouse_Portal {
         $business_attachment = $data['business_license_attachment_id'];
         $authorization_attachment = $data['authorization_letter_attachment_id'];
 
-        $data['business_license_attachment_id'] = $business_attachment === '' ? null : absint($business_attachment);
-        if ($business_attachment !== '' && $data['business_license_attachment_id'] < 1) {
+        $data['business_license_attachment_id'] = ($business_attachment === '' || $business_attachment === '0') ? null : absint($business_attachment);
+        if ($business_attachment !== '' && $business_attachment !== '0' && $data['business_license_attachment_id'] < 1) {
             return __('Business license attachment ID must be a positive integer.', 'wind-warehouse');
         }
 
-        $data['authorization_letter_attachment_id'] = $authorization_attachment === '' ? null : absint($authorization_attachment);
-        if ($authorization_attachment !== '' && $data['authorization_letter_attachment_id'] < 1) {
+        $data['authorization_letter_attachment_id'] = ($authorization_attachment === '' || $authorization_attachment === '0') ? null : absint($authorization_attachment);
+        if ($authorization_attachment !== '' && $authorization_attachment !== '0' && $data['authorization_letter_attachment_id'] < 1) {
             return __('Authorization letter attachment ID must be a positive integer.', 'wind-warehouse');
         }
 
@@ -1060,8 +1060,12 @@ final class Wind_Warehouse_Portal {
             ARRAY_A
         );
 
-        $form_action   = self::portal_post_url('dealers');
+        $form_action   = add_query_arg('wh', 'dealers', self::portal_url());
         $toggle_action = $form_action;
+
+        if (function_exists('wp_enqueue_media')) {
+            wp_enqueue_media();
+        }
 
         $html  = '<div class="ww-dealers">';
         if ($error_message !== null) {
@@ -1085,10 +1089,16 @@ final class Wind_Warehouse_Portal {
         $html .= '<input type="date" name="authorized_from" /></label></p>';
         $html .= '<p><label>' . esc_html__('Authorized To (optional)', 'wind-warehouse') . '<br />';
         $html .= '<input type="date" name="authorized_to" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Business License Attachment ID (optional)', 'wind-warehouse') . '<br />';
-        $html .= '<input type="number" name="business_license_attachment_id" min="1" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Authorization Letter Attachment ID (optional)', 'wind-warehouse') . '<br />';
-        $html .= '<input type="number" name="authorization_letter_attachment_id" min="1" /></label></p>';
+        $html .= '<p><label>' . esc_html__('Business License (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="hidden" name="business_license_attachment_id" id="ww_business_license_attachment_id" />';
+        $html .= '<button type="button" class="button" id="ww_business_license_button">' . esc_html__('Select / Upload', 'wind-warehouse') . '</button> ';
+        $html .= '<button type="button" class="button" id="ww_business_license_remove">' . esc_html__('Remove', 'wind-warehouse') . '</button>';
+        $html .= '<div id="ww_business_license_preview" class="ww-media-preview"></div></label></p>';
+        $html .= '<p><label>' . esc_html__('Authorization Letter (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<input type="hidden" name="authorization_letter_attachment_id" id="ww_authorization_letter_attachment_id" />';
+        $html .= '<button type="button" class="button" id="ww_authorization_letter_button">' . esc_html__('Select / Upload', 'wind-warehouse') . '</button> ';
+        $html .= '<button type="button" class="button" id="ww_authorization_letter_remove">' . esc_html__('Remove', 'wind-warehouse') . '</button>';
+        $html .= '<div id="ww_authorization_letter_preview" class="ww-media-preview"></div></label></p>';
         $html .= '<input type="hidden" name="ww_action" value="add_dealer" />';
         $html .= wp_nonce_field('ww_dealers_add', 'ww_nonce', true, false);
         $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
@@ -1146,6 +1156,36 @@ final class Wind_Warehouse_Portal {
         }
 
         $html .= '</tbody></table>';
+        $html .= '<script type="text/javascript">(function(){\n';
+        $html .= 'function initMediaSelector(config){\n';
+        $html .= '  var input = document.getElementById(config.inputId);\n';
+        $html .= '  var button = document.getElementById(config.buttonId);\n';
+        $html .= '  var removeButton = document.getElementById(config.removeButtonId);\n';
+        $html .= '  var preview = document.getElementById(config.previewId);\n';
+        $html .= '  if(!input || !button || !removeButton || !preview || typeof wp === "undefined" || !wp.media){return;}\n';
+        $html .= '  var frame;\n';
+        $html .= '  button.addEventListener("click", function(){\n';
+        $html .= '    if(frame){frame.open();return;}\n';
+        $html .= '    frame = wp.media({title: config.title, button: {text: config.buttonText}, library: {type: "image"}, multiple: false});\n';
+        $html .= '    frame.on("select", function(){\n';
+        $html .= '      var attachment = frame.state().get("selection").first().toJSON();\n';
+        $html .= '      input.value = attachment.id;\n';
+        $html .= '      var previewUrl = attachment.url;\n';
+        $html .= '      if(attachment.sizes && attachment.sizes.thumbnail && attachment.sizes.thumbnail.url){\n';
+        $html .= '        previewUrl = attachment.sizes.thumbnail.url;\n';
+        $html .= '      }\n';
+        $html .= '      preview.innerHTML = "<img src=\\"" + previewUrl + "\\" alt=\\"" + config.previewAlt + "\\" style=\\"max-width:120px;height:auto;\\" />";\n';
+        $html .= '    });\n';
+        $html .= '    frame.open();\n';
+        $html .= '  });\n';
+        $html .= '  removeButton.addEventListener("click", function(){\n';
+        $html .= '    input.value = "";\n';
+        $html .= '    preview.innerHTML = "";\n';
+        $html .= '  });\n';
+        $html .= '}\n';
+        $html .= 'initMediaSelector({inputId:"ww_business_license_attachment_id", buttonId:"ww_business_license_button", removeButtonId:"ww_business_license_remove", previewId:"ww_business_license_preview", title:"' . esc_js(__('Select Business License', 'wind-warehouse')) . '", buttonText:"' . esc_js(__('Use this image', 'wind-warehouse')) . '", previewAlt:"' . esc_js(__('Business License Preview', 'wind-warehouse')) . '"});\n';
+        $html .= 'initMediaSelector({inputId:"ww_authorization_letter_attachment_id", buttonId:"ww_authorization_letter_button", removeButtonId:"ww_authorization_letter_remove", previewId:"ww_authorization_letter_preview", title:"' . esc_js(__('Select Authorization Letter', 'wind-warehouse')) . '", buttonText:"' . esc_js(__('Use this image', 'wind-warehouse')) . '", previewAlt:"' . esc_js(__('Authorization Letter Preview', 'wind-warehouse')) . '"});\n';
+        $html .= '})();</script>';
         $html .= '</div>';
 
         return $html;
@@ -1178,7 +1218,7 @@ final class Wind_Warehouse_Portal {
             ARRAY_A
         );
 
-        $form_action = self::portal_post_url('generate');
+        $form_action = add_query_arg('wh', 'generate', self::portal_url());
 
         $html  = '<div class="ww-generate">';
         if ($error_message !== null) {

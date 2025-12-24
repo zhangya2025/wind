@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
 }
 
 class Wind_Warehouse_Schema {
-    const SCHEMA_VERSION = '1.1.0';
+    const SCHEMA_VERSION = '1.2.0';
     const OPTION_NAME = 'wh_schema_version';
 
     public static function maybe_upgrade_schema(): void {
@@ -55,6 +55,9 @@ class Wind_Warehouse_Schema {
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             sku_code varchar(191) NOT NULL,
             name varchar(255) NOT NULL DEFAULT '',
+            color varchar(50) DEFAULT NULL,
+            size varchar(50) DEFAULT NULL,
+            summary varchar(255) DEFAULT NULL,
             status varchar(50) NOT NULL DEFAULT 'active',
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

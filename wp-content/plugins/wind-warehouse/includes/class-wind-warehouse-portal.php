@@ -764,7 +764,7 @@ final class Wind_Warehouse_Portal {
         );
 
         $form_action   = admin_url('admin-ajax.php');
-        $toggle_action = self::portal_url();
+        $toggle_action = add_query_arg('wh', 'skus', self::portal_url());
 
         $html  = '<div class="ww-skus">';
         if ($success_message !== '') {

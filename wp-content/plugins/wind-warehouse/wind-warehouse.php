@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) {
 
 require_once __DIR__ . '/includes/db/class-wind-warehouse-schema.php';
 require_once __DIR__ . '/includes/class-wind-warehouse-portal.php';
+require_once __DIR__ . '/includes/class-wind-warehouse-query.php';
 require_once __DIR__ . '/includes/class-wind-warehouse-plugin.php';
 
 Wind_Warehouse_Plugin::init(__FILE__);

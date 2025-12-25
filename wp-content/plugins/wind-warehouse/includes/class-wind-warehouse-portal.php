@@ -19,8 +19,8 @@ final class Wind_Warehouse_Portal {
         add_shortcode(self::SHORTCODE, [self::class, 'render_portal']);
         add_action('wp_ajax_ww_add_sku', [self::class, 'ajax_add_sku']);
         add_action('wp_ajax_ww_add_dealer', [self::class, 'ajax_add_dealer']);
-        add_action('admin_post_ww_dealers_add', [self::class, 'admin_post_add_dealer']);
-        add_action('admin_post_ww_dealers_toggle', [self::class, 'admin_post_toggle_dealer_status']);
+        add_action('admin_post_ww_dealers_add', [self::class, 'admin_post_dealers_add']);
+        add_action('admin_post_ww_dealers_toggle', [self::class, 'admin_post_dealers_toggle']);
     }
 
     public static function portal_url(): string {
@@ -432,7 +432,7 @@ final class Wind_Warehouse_Portal {
         return null;
     }
 
-    public static function admin_post_add_dealer(): void {
+    public static function admin_post_dealers_add(): void {
         if (!is_user_logged_in()) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
@@ -441,13 +441,10 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        $redirect = wp_get_referer();
-        if ($redirect === false) {
-            $redirect = add_query_arg('wh', 'dealers', self::portal_url());
-        }
+        $redirect = add_query_arg('wh', 'dealers', self::portal_url());
 
         if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_dealers_add')) {
-            wp_safe_redirect(add_query_arg(['err' => 'invalid_request'], $redirect));
+            wp_safe_redirect(add_query_arg(['err' => 'bad_nonce'], $redirect));
             exit;
         }
 
@@ -487,31 +484,43 @@ final class Wind_Warehouse_Portal {
 
         $now = current_time('mysql');
         $data = [
-            'dealer_code'                     => $input_data['dealer_code'],
-            'name'                            => $input_data['name'],
-            'phone'                           => $input_data['phone'],
-            'address'                         => $input_data['address'],
-            'contact_name'                    => $input_data['contact_name'],
-            'intro'                           => $input_data['intro'],
-            'authorized_from'                 => $input_data['authorized_from'],
-            'authorized_to'                   => $input_data['authorized_to'],
-            'business_license_attachment_id'  => $input_data['business_license_attachment_id'],
+            'dealer_code'                        => $input_data['dealer_code'],
+            'name'                               => $input_data['name'],
+            'phone'                              => $input_data['phone'],
+            'address'                            => $input_data['address'],
+            'contact_name'                       => $input_data['contact_name'],
+            'intro'                              => $input_data['intro'],
+            'authorized_from'                    => $input_data['authorized_from'],
+            'authorized_to'                      => $input_data['authorized_to'],
+            'business_license_attachment_id'     => $input_data['business_license_attachment_id'],
             'authorization_letter_attachment_id' => $input_data['authorization_letter_attachment_id'],
-            'status'                          => 'active',
-            'created_at'                      => $now,
-            'updated_at'                      => $now,
+            'status'                             => 'active',
+            'created_at'                         => $now,
+            'updated_at'                         => $now,
         ];
 
         $inserted = $wpdb->insert(
             $table,
             $data,
             [
-                '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
             ]
         );
 
         if ($inserted === false) {
-            wp_safe_redirect(add_query_arg(['err' => 'db_error'], $redirect));
+            wp_safe_redirect(add_query_arg(['err' => 'insert_failed'], $redirect));
             exit;
         }
 
@@ -520,14 +529,14 @@ final class Wind_Warehouse_Portal {
                 'wh'  => 'dealers',
                 'msg' => 'created',
             ],
-            $redirect
+            self::portal_url()
         );
 
         wp_safe_redirect($redirect_url);
         exit;
     }
 
-    public static function admin_post_toggle_dealer_status(): void {
+    public static function admin_post_dealers_toggle(): void {
         if (!is_user_logged_in()) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
@@ -536,13 +545,10 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        $redirect = wp_get_referer();
-        if ($redirect === false) {
-            $redirect = add_query_arg('wh', 'dealers', self::portal_url());
-        }
+        $redirect = add_query_arg('wh', 'dealers', self::portal_url());
 
         if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_dealers_toggle')) {
-            wp_safe_redirect(add_query_arg(['err' => 'invalid_request'], $redirect));
+            wp_safe_redirect(add_query_arg(['err' => 'bad_nonce'], $redirect));
             exit;
         }
 
@@ -550,7 +556,7 @@ final class Wind_Warehouse_Portal {
         $target_status = isset($_POST['target_status']) ? sanitize_text_field(wp_unslash($_POST['target_status'])) : '';
 
         if ($dealer_id < 1 || !in_array($target_status, ['active', 'disabled'], true)) {
-            wp_safe_redirect(add_query_arg(['err' => 'invalid_request'], $redirect));
+            wp_safe_redirect(add_query_arg(['err' => 'bad_request'], $redirect));
             exit;
         }
 
@@ -562,7 +568,7 @@ final class Wind_Warehouse_Portal {
         );
 
         if ($dealer_code === null) {
-            wp_safe_redirect(add_query_arg(['err' => 'invalid_request'], $redirect));
+            wp_safe_redirect(add_query_arg(['err' => 'bad_request'], $redirect));
             exit;
         }
 
@@ -583,7 +589,7 @@ final class Wind_Warehouse_Portal {
         );
 
         if ($updated === false) {
-            wp_safe_redirect(add_query_arg(['err' => 'db_error'], $redirect));
+            wp_safe_redirect(add_query_arg(['err' => 'update_failed'], $redirect));
             exit;
         }
 
@@ -592,7 +598,7 @@ final class Wind_Warehouse_Portal {
                 'wh'  => 'dealers',
                 'msg' => $target_status === 'active' ? 'enabled' : 'disabled',
             ],
-            $redirect
+            self::portal_url()
         );
 
         wp_safe_redirect($redirect_url);
@@ -1160,10 +1166,12 @@ final class Wind_Warehouse_Portal {
             $err = sanitize_text_field(wp_unslash($_GET['err']));
             if ($err === 'hq_cannot_disable') {
                 $query_error_message = __('HQ dealer cannot be disabled.', 'wind-warehouse');
-            } elseif ($err === 'invalid_request') {
+            } elseif ($err === 'invalid_request' || $err === 'bad_nonce' || $err === 'bad_request') {
                 $query_error_message = __('Invalid request. Please try again.', 'wind-warehouse');
-            } elseif ($err === 'db_error') {
+            } elseif ($err === 'db_error' || $err === 'insert_failed') {
                 $query_error_message = __('Could not create dealer. Please try again.', 'wind-warehouse');
+            } elseif ($err === 'update_failed') {
+                $query_error_message = __('Could not update dealer. Please try again.', 'wind-warehouse');
             } elseif ($err === 'validation') {
                 $raw_err_msg = isset($_GET['err_msg']) ? sanitize_text_field(wp_unslash($_GET['err_msg'])) : '';
                 $query_error_message = $raw_err_msg !== '' ? rawurldecode($raw_err_msg) : __('Invalid request. Please try again.', 'wind-warehouse');

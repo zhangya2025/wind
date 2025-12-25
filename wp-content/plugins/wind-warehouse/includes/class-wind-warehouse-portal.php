@@ -11,6 +11,10 @@ final class Wind_Warehouse_Portal {
     private const TITLE = 'Wind Warehouse Portal';
     private const HQ_DEALER_CODE = 'HQ';
 
+    private static function portal_base_url(): string {
+        return trailingslashit(home_url('index.php/' . self::PAGE_SLUG));
+    }
+
     public static function register_shortcode(): void {
         add_shortcode(self::SHORTCODE, [self::class, 'render_portal']);
         add_action('wp_ajax_ww_add_sku', [self::class, 'ajax_add_sku']);
@@ -18,25 +22,15 @@ final class Wind_Warehouse_Portal {
     }
 
     public static function portal_url(): string {
-        $page = get_page_by_path(self::PAGE_SLUG);
-
-        if ($page instanceof WP_Post) {
-            $permalink = get_permalink($page->ID);
-
-            if (!empty($permalink)) {
-                return $permalink;
-            }
-        }
-
-        return home_url('/' . self::PAGE_SLUG . '/');
+        return self::portal_base_url();
     }
 
     private static function portal_query_base_url(): string {
-        return add_query_arg('pagename', self::PAGE_SLUG, home_url('/index.php'));
+        return self::portal_base_url();
     }
 
     private static function portal_post_url(string $view_key): string {
-        return add_query_arg('wh', $view_key, self::portal_query_base_url());
+        return add_query_arg('wh', $view_key, self::portal_base_url());
     }
 
     public static function ensure_portal_page(bool $force = false): void {

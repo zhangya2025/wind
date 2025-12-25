@@ -221,6 +221,10 @@ final class Wind_Warehouse_Portal {
             return self::render_ship_view($error_message);
         }
 
+        if ($view_key === 'reset-b') {
+            return Wind_Warehouse_Query::render_reset_b_view();
+        }
+
         return '<p>' . sprintf(
             /* translators: %s: module name */
             esc_html__('Coming soon: %s', 'wind-warehouse'),

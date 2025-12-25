@@ -9,6 +9,7 @@ final class Wind_Warehouse_Query {
     private const LEGACY_SLUG = 'verify';
     private const RATE_LIMIT_MAX = 10;
     private const RATE_LIMIT_WINDOW = MINUTE_IN_SECONDS;
+    private const CODE_REGEX = '/^(?:[A-Fa-f0-9]{20}|[A-Fa-f0-9]{32})$/';
     private static $table_columns_cache = [];
 
     public static function register_shortcode(): void {
@@ -61,7 +62,7 @@ final class Wind_Warehouse_Query {
     }
 
     public static function render_shortcode($atts = []): string {
-        $code_input = isset($_GET['code']) ? sanitize_text_field(wp_unslash($_GET['code'])) : '';
+        $code_input = isset($_GET['code']) ? self::normalize_code(sanitize_text_field(wp_unslash($_GET['code']))) : '';
         $is_internal = self::is_internal_actor();
 
         $html  = '<div class="ww-query">';
@@ -79,7 +80,7 @@ final class Wind_Warehouse_Query {
                 return $html;
             }
 
-            if (!preg_match('/^[A-Fa-f0-9]{40}$/', $code_input)) {
+            if (!preg_match(self::CODE_REGEX, $code_input)) {
                 $html .= '<p class="ww-error">' . esc_html__('防伪码格式无效', 'wind-warehouse') . '</p>';
                 $html .= '</div>';
                 return $html;
@@ -281,8 +282,8 @@ final class Wind_Warehouse_Query {
             exit;
         }
 
-        $code = isset($_POST['code']) ? sanitize_text_field(wp_unslash($_POST['code'])) : '';
-        if (!preg_match('/^[A-Fa-f0-9]{40}$/', $code)) {
+        $code = isset($_POST['code']) ? self::normalize_code(sanitize_text_field(wp_unslash($_POST['code']))) : '';
+        if (!preg_match(self::CODE_REGEX, $code)) {
             wp_safe_redirect(add_query_arg('err', 'invalid_code', $redirect));
             exit;
         }
@@ -421,6 +422,11 @@ final class Wind_Warehouse_Query {
     private static function get_request_ip(): string {
         $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '';
         return substr($ip, 0, 45);
+    }
+
+    private static function normalize_code(string $input): string {
+        $input = trim($input);
+        return preg_replace('/\s+/', '', $input) ?? '';
     }
 
     private static function get_table_columns(string $table): array {

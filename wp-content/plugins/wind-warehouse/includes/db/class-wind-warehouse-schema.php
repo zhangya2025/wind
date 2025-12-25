@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
 }
 
 class Wind_Warehouse_Schema {
-    const SCHEMA_VERSION = '1.3.0';
+    const SCHEMA_VERSION = '1.4.0';
     const OPTION_NAME = 'wh_schema_version';
 
     public static function maybe_upgrade_schema(): void {
@@ -177,7 +177,38 @@ class Wind_Warehouse_Schema {
 
         self::maybe_add_missing_dealer_columns();
         self::maybe_add_dealer_indexes();
+        self::ensure_ship_schema();
         self::ensure_hq_dealer();
+    }
+
+    private static function ensure_ship_schema(): void {
+        global $wpdb;
+
+        $items_table = $wpdb->prefix . 'wh_shipment_items';
+        $codes_table = $wpdb->prefix . 'wh_codes';
+
+        $item_columns = $wpdb->get_col("SHOW COLUMNS FROM {$items_table}", 0);
+        if (!in_array('code_id', $item_columns, true)) {
+            $wpdb->query("ALTER TABLE {$items_table} ADD COLUMN code_id bigint(20) unsigned NOT NULL");
+        }
+
+        $item_indexes = $wpdb->get_results("SHOW INDEX FROM {$items_table}", ARRAY_A);
+        $item_index_names = array_map(
+            static function (array $row): string {
+                return (string) $row['Key_name'];
+            },
+            $item_indexes
+        );
+
+        if (!in_array('code_id', $item_index_names, true)) {
+            $wpdb->query("ALTER TABLE {$items_table} ADD UNIQUE KEY code_id (code_id)");
+        }
+
+        $code_columns = $wpdb->get_col("SHOW COLUMNS FROM {$codes_table}", 0);
+
+        if (!in_array('shipment_id', $code_columns, true)) {
+            $wpdb->query("ALTER TABLE {$codes_table} ADD COLUMN shipment_id bigint(20) unsigned DEFAULT NULL AFTER batch_id");
+        }
     }
 
     private static function maybe_add_missing_dealer_columns(): void {

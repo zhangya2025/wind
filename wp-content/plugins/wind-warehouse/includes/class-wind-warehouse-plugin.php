@@ -170,6 +170,11 @@ final class Wind_Warehouse_Plugin {
             return;
         }
 
+        global $pagenow;
+        if (isset($pagenow) && ($pagenow === 'admin-post.php' || $pagenow === 'admin-ajax.php')) {
+            return;
+        }
+
         $user = wp_get_current_user();
         if (!$user instanceof WP_User) {
             return;

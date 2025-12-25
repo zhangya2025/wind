@@ -21,6 +21,10 @@ final class Wind_Warehouse_Portal {
         add_action('wp_ajax_ww_add_dealer', [self::class, 'ajax_add_dealer']);
         add_action('admin_post_ww_dealers_add', [self::class, 'admin_post_dealers_add']);
         add_action('admin_post_ww_dealers_toggle', [self::class, 'admin_post_dealers_toggle']);
+        add_action('admin_post_ww_ship_create', [self::class, 'admin_post_ship_create']);
+        add_action('wp_ajax_ww_ship_validate_code', [self::class, 'ajax_ship_validate_code']);
+        add_action('admin_post_ww_ship_confirm', [self::class, 'admin_post_ship_confirm']);
+        add_action('admin_post_ww_ship_export', [self::class, 'admin_post_ship_export']);
     }
 
     public static function portal_url(): string {
@@ -211,6 +215,10 @@ final class Wind_Warehouse_Portal {
 
         if ($view_key === 'generate') {
             return self::render_generate_view($error_message);
+        }
+
+        if ($view_key === 'ship') {
+            return self::render_ship_view($error_message);
         }
 
         return '<p>' . sprintf(
@@ -1398,6 +1406,697 @@ final class Wind_Warehouse_Portal {
         $html .= '</div>';
 
         return $html;
+    }
+
+    private static function render_ship_view(?string $error_message): string {
+        global $wpdb;
+
+        $success_message      = '';
+        $query_error_message  = null;
+        $shipment_id          = isset($_GET['shipment_id']) ? absint($_GET['shipment_id']) : 0;
+        $shipment_detail      = $shipment_id > 0 ? self::get_shipment_detail($shipment_id) : null;
+
+        if (isset($_GET['msg'])) {
+            $msg = sanitize_text_field(wp_unslash($_GET['msg']));
+            if ($msg === 'shipped') {
+                $success_message = __('Shipment created.', 'wind-warehouse');
+            }
+        }
+
+        if (isset($_GET['err'])) {
+            $err = sanitize_text_field(wp_unslash($_GET['err']));
+            if ($err === 'bad_nonce') {
+                $query_error_message = __('Invalid request. Please try again.', 'wind-warehouse');
+            } elseif ($err === 'bad_request' || $err === 'invalid_dealer' || $err === 'invalid_codes') {
+                $query_error_message = __('Invalid request parameters.', 'wind-warehouse');
+            } elseif ($err === 'duplicate_code') {
+                $query_error_message = __('Duplicate code detected. Please rescan.', 'wind-warehouse');
+            } elseif ($err === 'db_error') {
+                $query_error_message = __('Could not create shipment. Please try again.', 'wind-warehouse');
+            }
+        }
+
+        $dealers = self::get_active_dealers_for_ship();
+        $form_action = admin_url('admin-post.php');
+        $ajax_url    = admin_url('admin-ajax.php');
+        $validate_nonce = wp_create_nonce('ww_ship_validate');
+        $confirm_nonce  = wp_create_nonce('ww_ship_confirm');
+        $export_nonce   = wp_create_nonce('ww_ship_export');
+
+        $html  = '<div class="ww-ship">';
+        if ($success_message !== '') {
+            $html .= '<div class="notice notice-success"><p>' . esc_html($success_message) . '</p></div>';
+        }
+
+        if ($query_error_message !== null) {
+            $html .= '<div class="notice notice-error"><p>' . esc_html($query_error_message) . '</p></div>';
+        } elseif ($error_message !== null) {
+            $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
+        }
+
+        $html .= '<h2>' . esc_html__('Ship Codes', 'wind-warehouse') . '</h2>';
+        $html .= '<form id="ww-ship-form" method="post" action="' . esc_url($form_action) . '">';
+        $html .= '<input type="hidden" name="action" value="ww_ship_confirm" />';
+        $html .= '<input type="hidden" name="ww_nonce" value="' . esc_attr($confirm_nonce) . '" />';
+        $html .= '<input type="hidden" id="ww-ship-dealer-id" name="dealer_id" value="" />';
+
+        $html .= '<div class="ww-ship-dealer">';
+        $html .= '<label>' . esc_html__('Dealer (type code/name to search)', 'wind-warehouse') . '</label>';
+        $html .= '<input type="text" id="ww-ship-dealer-search" placeholder="' . esc_attr__('Search dealer', 'wind-warehouse') . '" autocomplete="off" />';
+        $html .= '<div id="ww-ship-dealer-suggestions" class="ww-ship-suggestions"></div>';
+        $html .= '</div>';
+
+        $html .= '<div class="ww-ship-scanner">';
+        $html .= '<label for="ww-ship-scan-input">' . esc_html__('Scan codes (press Enter after each)', 'wind-warehouse') . '</label>';
+        $html .= '<input type="text" id="ww-ship-scan-input" autocomplete="off" />';
+        $html .= '<p class="description">' . esc_html__('Scan continuously; valid codes will appear below.', 'wind-warehouse') . '</p>';
+        $html .= '<div id="ww-ship-scan-message" class="ww-ship-message"></div>';
+        $html .= '</div>';
+
+        $html .= '<div class="ww-ship-table-wrapper">';
+        $html .= '<table class="ww-ship-table"><thead><tr>';
+        $html .= '<th>' . esc_html__('Code', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Color', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Size', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Action', 'wind-warehouse') . '</th>';
+        $html .= '</tr></thead><tbody id="ww-ship-rows"></tbody></table>';
+        $html .= '</div>';
+
+        $html .= '<div class="ww-ship-submit">';
+        $html .= '<button type="submit" id="ww-ship-confirm" class="button button-primary">' . esc_html__('Confirm Shipment', 'wind-warehouse') . '</button>';
+        $html .= '</div>';
+
+        $html .= '</form>';
+
+        if ($shipment_detail !== null) {
+            $shipment = $shipment_detail['shipment'];
+            $summary  = $shipment_detail['summary'];
+            $items    = $shipment_detail['items'];
+            $export_url = add_query_arg(
+                [
+                    'action'       => 'ww_ship_export',
+                    'shipment_id'  => $shipment_id,
+                    'ww_nonce'     => $export_nonce,
+                ],
+                $form_action
+            );
+
+            $html .= '<div class="ww-ship-summary">';
+            $html .= '<h3>' . esc_html__('Shipment Summary', 'wind-warehouse') . '</h3>';
+            $html .= '<p>' . esc_html__('Dealer:', 'wind-warehouse') . ' ' . esc_html($shipment['dealer_name_snapshot'] ?? ($shipment['dealer_name'] ?? '')) . '</p>';
+            $html .= '<p>' . esc_html__('Address:', 'wind-warehouse') . ' ' . esc_html($shipment['dealer_address_snapshot'] ?? ($shipment['dealer_address'] ?? '')) . '</p>';
+            $html .= '<p>' . esc_html__('Shipped at:', 'wind-warehouse') . ' ' . esc_html($shipment['shipped_at']);
+            $html .= ' <button type="button" class="button" onclick="window.print();">' . esc_html__('Print', 'wind-warehouse') . '</button>';
+            $html .= ' <a class="button" href="' . esc_url($export_url) . '">' . esc_html__('Export CSV', 'wind-warehouse') . '</a>';
+            $html .= '</p>';
+
+            $html .= '<table class="ww-ship-summary-table"><thead><tr>';
+            $html .= '<th>' . esc_html__('SKU Code', 'wind-warehouse') . '</th>';
+            $html .= '<th>' . esc_html__('Name', 'wind-warehouse') . '</th>';
+            $html .= '<th>' . esc_html__('Color', 'wind-warehouse') . '</th>';
+            $html .= '<th>' . esc_html__('Size', 'wind-warehouse') . '</th>';
+            $html .= '<th>' . esc_html__('Quantity', 'wind-warehouse') . '</th>';
+            $html .= '</tr></thead><tbody>';
+            foreach ($summary as $row) {
+                $html .= '<tr>';
+                $html .= '<td>' . esc_html($row['sku_code'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html($row['name'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html($row['color'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html($row['size'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html((string) $row['qty']) . '</td>';
+                $html .= '</tr>';
+            }
+            $html .= '</tbody></table>';
+
+            if (!empty($items)) {
+                $html .= '<h4>' . esc_html__('Shipment Items', 'wind-warehouse') . '</h4>';
+                $html .= '<table class="ww-ship-items-table"><thead><tr>';
+                $html .= '<th>' . esc_html__('Code', 'wind-warehouse') . '</th>';
+                $html .= '<th>' . esc_html__('SKU Code', 'wind-warehouse') . '</th>';
+                $html .= '<th>' . esc_html__('Name', 'wind-warehouse') . '</th>';
+                $html .= '<th>' . esc_html__('Color', 'wind-warehouse') . '</th>';
+                $html .= '<th>' . esc_html__('Size', 'wind-warehouse') . '</th>';
+                $html .= '</tr></thead><tbody>';
+                foreach ($items as $item) {
+                    $html .= '<tr>';
+                    $html .= '<td>' . esc_html($item['code']) . '</td>';
+                    $html .= '<td>' . esc_html($item['sku_code'] ?? '') . '</td>';
+                    $html .= '<td>' . esc_html($item['name'] ?? '') . '</td>';
+                    $html .= '<td>' . esc_html($item['color'] ?? '') . '</td>';
+                    $html .= '<td>' . esc_html($item['size'] ?? '') . '</td>';
+                    $html .= '</tr>';
+                }
+                $html .= '</tbody></table>';
+            }
+
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+
+        $dealers_json = wp_json_encode($dealers);
+        $script  = '<script>document.addEventListener("DOMContentLoaded",function(){';
+        $script .= 'const dealers=' . $dealers_json . ';';
+        $script .= 'const dealerSearch=document.getElementById("ww-ship-dealer-search");';
+        $script .= 'const dealerIdInput=document.getElementById("ww-ship-dealer-id");';
+        $script .= 'const suggestionBox=document.getElementById("ww-ship-dealer-suggestions");';
+        $script .= 'const scanInput=document.getElementById("ww-ship-scan-input");';
+        $script .= 'const tableBody=document.getElementById("ww-ship-rows");';
+        $script .= 'const messageBox=document.getElementById("ww-ship-scan-message");';
+        $script .= 'const form=document.getElementById("ww-ship-form");';
+        $script .= 'const scannedMap=new Map();';
+
+        $script .= 'function focusScan(){ if(scanInput){ scanInput.focus(); }};';
+        $script .= 'function setMessage(msg,isError=false){ if(!messageBox)return; messageBox.textContent=msg; messageBox.className="ww-ship-message"+(isError?" ww-ship-error":" ww-ship-success"); };';
+        $script .= 'function renderDealerSuggestions(keyword){ suggestionBox.innerHTML=""; if(!keyword){ return; } const lower=keyword.toLowerCase(); const matched=dealers.filter(function(d){ return d.dealer_code.toLowerCase().includes(lower)||d.name.toLowerCase().includes(lower); }).slice(0,8); matched.forEach(function(d){ const btn=document.createElement("button"); btn.type="button"; btn.textContent=d.dealer_code+" - "+d.name; btn.addEventListener("click",function(){ dealerIdInput.value=d.id; dealerSearch.value=d.dealer_code+" - "+d.name; suggestionBox.innerHTML=""; focusScan(); }); suggestionBox.appendChild(btn);}); };';
+        $script .= 'dealerSearch.addEventListener("input",function(e){ dealerIdInput.value=""; renderDealerSuggestions(e.target.value);});';
+        $script .= 'dealerSearch.addEventListener("focus",function(){ renderDealerSuggestions(dealerSearch.value);});';
+
+        $script .= 'function addRow(data){ if(scannedMap.has(data.code_id)){ setMessage("' . esc_js(__('Code already scanned.', 'wind-warehouse')) . '",true); return; } scannedMap.set(data.code_id,true); const tr=document.createElement("tr"); tr.dataset.codeId=data.code_id; tr.innerHTML="<td>"+data.code+"</td><td>"+(data.sku_code||"")+"</td><td>"+(data.color||"")+"</td><td>"+(data.size||"")+"</td><td><button type=\"button\" class=\"button ww-ship-remove\">' . esc_js(__('Remove', 'wind-warehouse')) . '</button></td>"; const hidden=document.createElement("input"); hidden.type="hidden"; hidden.name="code_ids[]"; hidden.value=data.code_id; tr.appendChild(hidden); const removeBtn=tr.querySelector(".ww-ship-remove"); removeBtn.addEventListener("click",function(){ scannedMap.delete(data.code_id); tr.remove(); setMessage("' . esc_js(__('Removed code.', 'wind-warehouse')) . '"); focusScan();}); tableBody.appendChild(tr); setMessage("' . esc_js(__('Code added.', 'wind-warehouse')) . '"); scanInput.value=""; focusScan(); }';
+
+        $script .= 'async function validateCode(code){ const formData=new FormData(); formData.append("action","ww_ship_validate_code"); formData.append("code",code); formData.append("ww_nonce","' . esc_js($validate_nonce) . '"); try { const res=await fetch("' . esc_url_raw($ajax_url) . '",{method:"POST",credentials:"same-origin",body:formData}); const json=await res.json(); if(!json.success){ setMessage(json.data && json.data.message ? json.data.message : "' . esc_js(__('Invalid code.', 'wind-warehouse')) . '",true); return; } addRow(json.data); } catch(e){ setMessage("' . esc_js(__('Network error. Please try again.', 'wind-warehouse')) . '",true);} }';
+
+        $script .= 'scanInput.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); const code=scanInput.value.trim(); if(!code){ setMessage("' . esc_js(__('Please scan a code.', 'wind-warehouse')) . '",true); return; } if(dealerIdInput.value===""){ setMessage("' . esc_js(__('Please select a dealer first.', 'wind-warehouse')) . '",true); focusScan(); return; } validateCode(code); }});';
+
+        $script .= 'form.addEventListener("submit",function(e){ if(dealerIdInput.value===""){ e.preventDefault(); setMessage("' . esc_js(__('Please select a dealer.', 'wind-warehouse')) . '",true); dealerSearch.focus(); return; } if(tableBody.children.length===0){ e.preventDefault(); setMessage("' . esc_js(__('Please scan at least one code.', 'wind-warehouse')) . '",true); focusScan(); return; } });';
+
+        $script .= 'focusScan();';
+        $script .= '});</script>';
+
+        return $html . $script;
+    }
+
+    private static function get_active_dealers_for_ship(): array {
+        global $wpdb;
+
+        $dealer_table = $wpdb->prefix . 'wh_dealers';
+
+        return $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, dealer_code, name, address FROM {$dealer_table} WHERE status = %s OR dealer_code = %s ORDER BY dealer_code ASC LIMIT %d",
+                'active',
+                self::HQ_DEALER_CODE,
+                500
+            ),
+            ARRAY_A
+        );
+    }
+
+    public static function ajax_ship_validate_code(): void {
+        if (!is_user_logged_in() || !current_user_can('wh_ship_codes')) {
+            wp_send_json_error(['message' => __('Forbidden', 'wind-warehouse')], 403);
+        }
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_ship_validate')) {
+            wp_send_json_error(['message' => __('Invalid request. Please refresh and try again.', 'wind-warehouse')]);
+        }
+
+        $code = isset($_POST['code']) ? trim(sanitize_text_field(wp_unslash($_POST['code']))) : '';
+
+        if ($code === '') {
+            wp_send_json_error(['message' => __('Please scan a code.', 'wind-warehouse')]);
+        }
+
+        global $wpdb;
+        $code_table = $wpdb->prefix . 'wh_codes';
+        $sku_table  = $wpdb->prefix . 'wh_skus';
+
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT c.id, c.code, c.status, c.shipped_at, c.sku_id, s.sku_code, s.name, s.color, s.size FROM {$code_table} c LEFT JOIN {$sku_table} s ON c.sku_id = s.id WHERE c.code = %s LIMIT 1",
+                $code
+            ),
+            ARRAY_A
+        );
+
+        if ($row === null) {
+            wp_send_json_error(['message' => __('Code not found.', 'wind-warehouse')]);
+        }
+
+        if ($row['status'] !== 'in_stock' || !empty($row['shipped_at'])) {
+            wp_send_json_error(['message' => __('Code already shipped or unavailable.', 'wind-warehouse')]);
+        }
+
+        wp_send_json_success(
+            [
+                'code_id'  => (int) $row['id'],
+                'code'     => $row['code'],
+                'sku_id'   => (int) $row['sku_id'],
+                'sku_code' => $row['sku_code'],
+                'name'     => $row['name'],
+                'color'    => $row['color'],
+                'size'     => $row['size'],
+            ]
+        );
+    }
+
+    public static function admin_post_ship_confirm(): void {
+        if (!is_user_logged_in()) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!current_user_can('wh_ship_codes')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        $redirect = add_query_arg('wh', 'ship', self::portal_url());
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_ship_confirm')) {
+            wp_safe_redirect(add_query_arg(['err' => 'bad_nonce'], $redirect));
+            exit;
+        }
+
+        $dealer_id = isset($_POST['dealer_id']) ? absint($_POST['dealer_id']) : 0;
+        $code_ids  = isset($_POST['code_ids']) && is_array($_POST['code_ids']) ? array_map('absint', $_POST['code_ids']) : [];
+        $unique_code_ids = array_values(array_unique(array_filter($code_ids)));
+
+        if ($dealer_id < 1 || empty($unique_code_ids)) {
+            wp_safe_redirect(add_query_arg(['err' => 'bad_request'], $redirect));
+            exit;
+        }
+
+        global $wpdb;
+        $dealer_table   = $wpdb->prefix . 'wh_dealers';
+        $code_table     = $wpdb->prefix . 'wh_codes';
+        $shipment_table = $wpdb->prefix . 'wh_shipments';
+        $items_table    = $wpdb->prefix . 'wh_shipment_items';
+        $events_table   = $wpdb->prefix . 'wh_events';
+
+        $dealer = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id, name, address FROM {$dealer_table} WHERE id = %d AND (status = %s OR dealer_code = %s) LIMIT 1",
+                $dealer_id,
+                'active',
+                self::HQ_DEALER_CODE
+            ),
+            ARRAY_A
+        );
+
+        if ($dealer === null) {
+            wp_safe_redirect(add_query_arg(['err' => 'invalid_dealer'], $redirect));
+            exit;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($unique_code_ids), '%d'));
+
+        $wpdb->query('START TRANSACTION');
+
+        $codes = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, code, sku_id, status, shipped_at FROM {$code_table} WHERE id IN ({$placeholders}) FOR UPDATE",
+                $unique_code_ids
+            ),
+            ARRAY_A
+        );
+
+        if (count($codes) !== count($unique_code_ids)) {
+            $wpdb->query('ROLLBACK');
+            wp_safe_redirect(add_query_arg(['err' => 'invalid_codes'], $redirect));
+            exit;
+        }
+
+        foreach ($codes as $code_row) {
+            if ($code_row['status'] !== 'in_stock' || !empty($code_row['shipped_at'])) {
+                $wpdb->query('ROLLBACK');
+                wp_safe_redirect(add_query_arg(['err' => 'invalid_codes'], $redirect));
+                exit;
+            }
+        }
+
+        $now = current_time('mysql');
+
+        $shipment_inserted = $wpdb->insert(
+            $shipment_table,
+            [
+                'dealer_id'               => $dealer_id,
+                'created_by'              => get_current_user_id(),
+                'shipped_at'              => $now,
+                'status'                  => 'shipped',
+                'dealer_name_snapshot'    => $dealer['name'] ?? null,
+                'dealer_address_snapshot' => $dealer['address'] ?? null,
+                'created_at'              => $now,
+            ],
+            ['%d', '%d', '%s', '%s', '%s', '%s', '%s']
+        );
+
+        if ($shipment_inserted === false) {
+            $wpdb->query('ROLLBACK');
+            wp_safe_redirect(add_query_arg(['err' => 'db_error'], $redirect));
+            exit;
+        }
+
+        $shipment_id = (int) $wpdb->insert_id;
+
+        foreach ($codes as $code_row) {
+            $inserted_item = $wpdb->insert(
+                $items_table,
+                [
+                    'shipment_id' => $shipment_id,
+                    'code_id'     => $code_row['id'],
+                    'sku_id'      => $code_row['sku_id'],
+                    'code'        => $code_row['code'],
+                    'created_at'  => $now,
+                ],
+                ['%d', '%d', '%d', '%s', '%s']
+            );
+
+            if ($inserted_item === false) {
+                $wpdb->query('ROLLBACK');
+                $error_param = stripos((string) $wpdb->last_error, 'duplicate') !== false ? 'duplicate_code' : 'db_error';
+                wp_safe_redirect(add_query_arg(['err' => $error_param], $redirect));
+                exit;
+            }
+        }
+
+        $update_sql = $wpdb->prepare(
+            "UPDATE {$code_table} SET status = %s, dealer_id = %d, shipment_id = %d, shipped_at = %s WHERE id IN ({$placeholders})",
+            array_merge(['shipped', $dealer_id, $shipment_id, $now], $unique_code_ids)
+        );
+
+        $updated = $wpdb->query($update_sql);
+
+        if ($updated === false) {
+            $wpdb->query('ROLLBACK');
+            wp_safe_redirect(add_query_arg(['err' => 'db_error'], $redirect));
+            exit;
+        }
+
+        $ip_address = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '0.0.0.0';
+
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $events_table)) === $events_table) {
+            $wpdb->insert(
+                $events_table,
+                [
+                    'event_type' => 'ship',
+                    'code'       => $codes[0]['code'],
+                    'code_id'    => $codes[0]['id'],
+                    'ip'         => $ip_address,
+                    'meta_json'  => wp_json_encode([
+                        'shipment_id' => $shipment_id,
+                        'dealer_id'   => $dealer_id,
+                        'qty'         => count($unique_code_ids),
+                        'actor'       => get_current_user_id(),
+                        'code_ids'    => $unique_code_ids,
+                    ]),
+                    'created_at' => $now,
+                ],
+                ['%s', '%s', '%d', '%s', '%s', '%s']
+            );
+        }
+
+        $wpdb->query('COMMIT');
+
+        $redirect_url = add_query_arg(
+            [
+                'wh'          => 'ship',
+                'msg'         => 'shipped',
+                'shipment_id' => $shipment_id,
+            ],
+            self::portal_url()
+        );
+
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
+
+    public static function admin_post_ship_export(): void {
+        if (!is_user_logged_in()) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!current_user_can('wh_ship_codes')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        $shipment_id = isset($_GET['shipment_id']) ? absint($_GET['shipment_id']) : 0;
+        if ($shipment_id < 1) {
+            wp_die(__('Invalid request.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        if (!isset($_GET['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['ww_nonce'])), 'ww_ship_export')) {
+            wp_die(__('Invalid request.', 'wind-warehouse'), '', ['response' => 400]);
+        }
+
+        $detail = self::get_shipment_detail($shipment_id);
+
+        if ($detail === null) {
+            wp_die(__('Shipment not found.', 'wind-warehouse'), '', ['response' => 404]);
+        }
+
+        $shipment = $detail['shipment'];
+        $summary  = $detail['summary'];
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="shipment-' . $shipment_id . '.csv"');
+
+        $output = fopen('php://output', 'w');
+        fputcsv($output, ['dealer_code', 'dealer_name', 'address', 'shipped_at', 'sku_code', 'name', 'color', 'size', 'qty']);
+
+        foreach ($summary as $row) {
+            fputcsv(
+                $output,
+                [
+                    $shipment['dealer_code'] ?? '',
+                    $shipment['dealer_name_snapshot'] ?? ($shipment['dealer_name'] ?? ''),
+                    $shipment['dealer_address_snapshot'] ?? ($shipment['dealer_address'] ?? ''),
+                    $shipment['shipped_at'],
+                    $row['sku_code'] ?? '',
+                    $row['name'] ?? '',
+                    $row['color'] ?? '',
+                    $row['size'] ?? '',
+                    $row['qty'],
+                ]
+            );
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    private static function get_shipment_detail(int $shipment_id): ?array {
+        global $wpdb;
+
+        $shipment_table = $wpdb->prefix . 'wh_shipments';
+        $items_table    = $wpdb->prefix . 'wh_shipment_items';
+        $dealer_table   = $wpdb->prefix . 'wh_dealers';
+        $sku_table      = $wpdb->prefix . 'wh_skus';
+
+        $shipment = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT s.*, d.dealer_code, d.name as dealer_name, d.address as dealer_address FROM {$shipment_table} s LEFT JOIN {$dealer_table} d ON s.dealer_id = d.id WHERE s.id = %d",
+                $shipment_id
+            ),
+            ARRAY_A
+        );
+
+        if ($shipment === null) {
+            return null;
+        }
+
+        $items = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT i.*, sk.sku_code, sk.name, sk.color, sk.size FROM {$items_table} i LEFT JOIN {$sku_table} sk ON i.sku_id = sk.id WHERE i.shipment_id = %d",
+                $shipment_id
+            ),
+            ARRAY_A
+        );
+
+        $summary = [];
+        foreach ($items as $item) {
+            $key = (string) ($item['sku_id'] ?? '');
+            if (!isset($summary[$key])) {
+                $summary[$key] = [
+                    'sku_code' => $item['sku_code'] ?? '',
+                    'name'     => $item['name'] ?? '',
+                    'color'    => $item['color'] ?? '',
+                    'size'     => $item['size'] ?? '',
+                    'qty'      => 0,
+                ];
+            }
+
+            $summary[$key]['qty']++;
+        }
+
+        return [
+            'shipment' => $shipment,
+            'items'    => $items,
+            'summary'  => array_values($summary),
+        ];
+    }
+
+    public static function admin_post_ship_create(): void {
+        if (!is_user_logged_in()) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!current_user_can('wh_ship_codes')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        $redirect = add_query_arg('wh', 'ship', self::portal_url());
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_ship_create')) {
+            wp_safe_redirect(add_query_arg(['err' => 'bad_nonce'], $redirect));
+            exit;
+        }
+
+        $dealer_id = isset($_POST['dealer_id']) ? absint($_POST['dealer_id']) : 0;
+        $sku_id    = isset($_POST['sku_id']) ? absint($_POST['sku_id']) : 0;
+        $quantity  = isset($_POST['quantity']) ? absint($_POST['quantity']) : 0;
+        $notes     = isset($_POST['notes']) ? sanitize_text_field(wp_unslash($_POST['notes'])) : '';
+
+        if ($dealer_id < 1 || $sku_id < 1 || $quantity < 1 || $quantity > 200) {
+            wp_safe_redirect(add_query_arg(['err' => 'bad_request'], $redirect));
+            exit;
+        }
+
+        global $wpdb;
+        $dealer_table   = $wpdb->prefix . 'wh_dealers';
+        $sku_table      = $wpdb->prefix . 'wh_skus';
+        $code_table     = $wpdb->prefix . 'wh_codes';
+        $shipment_table = $wpdb->prefix . 'wh_shipments';
+        $items_table    = $wpdb->prefix . 'wh_shipment_items';
+        $events_table   = $wpdb->prefix . 'wh_events';
+
+        $dealer = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id, dealer_code, name, address FROM {$dealer_table} WHERE id = %d AND (status = %s OR dealer_code = %s) LIMIT 1",
+                $dealer_id,
+                'active',
+                self::HQ_DEALER_CODE
+            ),
+            ARRAY_A
+        );
+
+        if ($dealer === null) {
+            wp_safe_redirect(add_query_arg(['err' => 'invalid_dealer'], $redirect));
+            exit;
+        }
+
+        $sku_exists = $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$sku_table} WHERE id = %d AND status = %s", $sku_id, 'active')
+        );
+
+        if ($sku_exists === null) {
+            wp_safe_redirect(add_query_arg(['err' => 'invalid_sku'], $redirect));
+            exit;
+        }
+
+        $wpdb->query('START TRANSACTION');
+
+        $codes = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, code FROM {$code_table} WHERE sku_id = %d AND status = %s ORDER BY id ASC LIMIT %d FOR UPDATE",
+                $sku_id,
+                'in_stock',
+                $quantity
+            ),
+            ARRAY_A
+        );
+
+        if (count($codes) < $quantity) {
+            $wpdb->query('ROLLBACK');
+            wp_safe_redirect(add_query_arg(['err' => 'insufficient_stock'], $redirect));
+            exit;
+        }
+
+        $now = current_time('mysql');
+
+        $shipment_inserted = $wpdb->insert(
+            $shipment_table,
+            [
+                'dealer_id'               => $dealer_id,
+                'created_by'              => get_current_user_id(),
+                'shipped_at'              => $now,
+                'status'                  => 'shipped',
+                'notes'                   => $notes !== '' ? $notes : null,
+                'dealer_name_snapshot'    => $dealer['name'] ?? null,
+                'dealer_address_snapshot' => $dealer['address'] ?? null,
+                'created_at'              => $now,
+            ],
+            ['%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s']
+        );
+
+        if ($shipment_inserted === false) {
+            $wpdb->query('ROLLBACK');
+            wp_safe_redirect(add_query_arg(['err' => 'db_error'], $redirect));
+            exit;
+        }
+
+        $shipment_id = (int) $wpdb->insert_id;
+
+        foreach ($codes as $code_row) {
+            $inserted_item = $wpdb->insert(
+                $items_table,
+                [
+                    'shipment_id' => $shipment_id,
+                    'code_id'     => $code_row['id'],
+                    'sku_id'      => $sku_id,
+                    'code'        => $code_row['code'],
+                    'created_at'  => $now,
+                ],
+                ['%d', '%d', '%d', '%s', '%s']
+            );
+
+            if ($inserted_item === false) {
+                $wpdb->query('ROLLBACK');
+                wp_safe_redirect(add_query_arg(['err' => 'db_error'], $redirect));
+                exit;
+            }
+        }
+
+        $code_ids = wp_list_pluck($codes, 'id');
+        $placeholders = implode(',', array_fill(0, count($code_ids), '%d'));
+
+        $update_sql = $wpdb->prepare(
+            "UPDATE {$code_table} SET status = %s, dealer_id = %d, shipment_id = %d, shipped_at = %s WHERE id IN ({$placeholders})",
+            array_merge(['shipped', $dealer_id, $shipment_id, $now], $code_ids)
+        );
+
+        $updated = $wpdb->query($update_sql);
+
+        if ($updated === false) {
+            $wpdb->query('ROLLBACK');
+            wp_safe_redirect(add_query_arg(['err' => 'db_error'], $redirect));
+            exit;
+        }
+
+        $first_code = $codes[0];
+        $ip_address = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '';
+
+        $wpdb->insert(
+            $events_table,
+            [
+                'event_type' => 'ship',
+                'code'       => $first_code['code'],
+                'code_id'    => $first_code['id'],
+                'ip'         => $ip_address !== '' ? $ip_address : '0.0.0.0',
+                'meta_json'  => wp_json_encode([
+                    'dealer_id'   => $dealer_id,
+                    'sku_id'      => $sku_id,
+                    'quantity'    => $quantity,
+                    'shipment_id' => $shipment_id,
+                    'operator'    => get_current_user_id(),
+                    'notes'       => $notes,
+                ]),
+                'created_at' => $now,
+            ],
+            ['%s', '%s', '%d', '%s', '%s', '%s']
+        );
+
+        $wpdb->query('COMMIT');
+
+        $redirect_url = add_query_arg(
+            [
+                'wh'  => 'ship',
+                'msg' => 'shipped',
+            ],
+            self::portal_url()
+        );
+
+        wp_safe_redirect($redirect_url);
+        exit;
     }
 
     private static function render_user_info(WP_User $user): string {

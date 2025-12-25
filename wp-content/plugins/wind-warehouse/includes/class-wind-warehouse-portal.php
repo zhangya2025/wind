@@ -1403,7 +1403,310 @@ final class Wind_Warehouse_Portal {
         }
 
         $html .= '</tbody></table>';
+
+        $html .= '<h2>' . esc_html__('Codes', 'wind-warehouse') . '</h2>';
+
+        $summary = self::get_codes_summary();
+        $filters = self::get_codes_filters_from_request();
+        $total_codes = self::query_codes_count($filters);
+        $codes = [];
+
+        if ($total_codes > 0) {
+            $codes = self::query_codes_page($filters, $filters['per_page'], $filters['page']);
+        }
+
+        $summary_html  = '<div class="notice notice-info"><p>';
+        $summary_html .= esc_html__('Total codes', 'wind-warehouse') . ': ' . esc_html((string) $summary['total']) . ' | ';
+        $summary_html .= esc_html__('In stock', 'wind-warehouse') . ': ' . esc_html((string) $summary['in_stock']) . ' | ';
+        $summary_html .= esc_html__('Shipped', 'wind-warehouse') . ': ' . esc_html((string) $summary['shipped']) . ' | ';
+        $summary_html .= esc_html__('Latest generated at', 'wind-warehouse') . ': ' . esc_html($summary['latest_generated_at'] ?? '-');
+        $summary_html .= '</p></div>';
+
+        $filter_action = add_query_arg('wh', 'generate', self::portal_url());
+
+        $html .= $summary_html;
+        $html .= '<form method="get" action="' . esc_url($filter_action) . '">';
+        $html .= '<input type="hidden" name="wh" value="generate" />';
+        $html .= '<div class="ww-filters">';
+        $html .= '<p><label>' . esc_html__('SKU', 'wind-warehouse') . '<br />';
+        $html .= '<select name="sku_id">';
+        $html .= '<option value="">' . esc_html__('All', 'wind-warehouse') . '</option>';
+        foreach ($skus as $sku) {
+            $label = $sku['sku_code'] . ' - ' . $sku['name'];
+            $selected = $filters['sku_id'] === (int) $sku['id'] ? ' selected' : '';
+            $html .= '<option value="' . esc_attr($sku['id']) . '"' . $selected . '>' . esc_html($label) . '</option>';
+        }
+        $html .= '</select></label></p>';
+
+        $html .= '<p><label>' . esc_html__('Batch No', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="batch_no" value="' . esc_attr($filters['batch_no']) . '" /></label></p>';
+
+        $html .= '<p><label>' . esc_html__('Code', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="code" value="' . esc_attr($filters['code']) . '" /></label></p>';
+
+        $html .= '<p><label>' . esc_html__('Status', 'wind-warehouse') . '<br />';
+        $html .= '<select name="status">';
+        $statuses = [
+            'all'      => esc_html__('All', 'wind-warehouse'),
+            'in_stock' => esc_html__('In stock', 'wind-warehouse'),
+            'shipped'  => esc_html__('Shipped', 'wind-warehouse'),
+        ];
+        foreach ($statuses as $value => $label) {
+            $selected = $filters['status'] === $value ? ' selected' : '';
+            $html .= '<option value="' . esc_attr($value) . '"' . $selected . '>' . esc_html($label) . '</option>';
+        }
+        $html .= '</select></label></p>';
+
+        $html .= '<p><label>' . esc_html__('Per page', 'wind-warehouse') . '<br />';
+        $per_page_options = [20, 50, 100];
+        $html .= '<select name="per_page">';
+        foreach ($per_page_options as $option) {
+            $selected = $filters['per_page'] === $option ? ' selected' : '';
+            $html .= '<option value="' . esc_attr($option) . '"' . $selected . '>' . esc_html($option) . '</option>';
+        }
+        $html .= '</select></label></p>';
+
+        $html .= '<p><button type="submit" class="button">' . esc_html__('Filter', 'wind-warehouse') . '</button></p>';
         $html .= '</div>';
+        $html .= '</form>';
+
+        $html .= '<table class="ww-table">';
+        $html .= '<thead><tr>';
+        $html .= '<th>' . esc_html__('Code', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Batch No', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Generated At', 'wind-warehouse') . '</th>';
+        $html .= '</tr></thead>';
+        $html .= '<tbody>';
+
+        if (!empty($codes)) {
+            foreach ($codes as $code_row) {
+                $sku_label = $code_row['sku_code'] !== null ? $code_row['sku_code'] . ' - ' . $code_row['sku_name'] : '';
+                $html .= '<tr>';
+                $html .= '<td>' . esc_html($code_row['code']) . '</td>';
+                $html .= '<td>' . esc_html($sku_label) . '</td>';
+                $html .= '<td>' . esc_html($code_row['batch_no'] ?? '') . '</td>';
+                $html .= '<td>' . esc_html($code_row['status']) . '</td>';
+                $html .= '<td>' . esc_html($code_row['generated_at']) . '</td>';
+                $html .= '</tr>';
+            }
+        } else {
+            $html .= '<tr><td colspan="5">' . esc_html__('No codes found.', 'wind-warehouse') . '</td></tr>';
+        }
+
+        $html .= '</tbody></table>';
+
+        $base_args = [
+            'wh'       => 'generate',
+            'sku_id'   => $filters['sku_id'] ?: '',
+            'batch_no' => $filters['batch_no'],
+            'code'     => $filters['code'],
+            'status'   => $filters['status'],
+            'per_page' => $filters['per_page'],
+        ];
+
+        $html .= self::render_codes_pagination($total_codes, $filters['page'], $filters['per_page'], $base_args);
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    private static function get_codes_summary(): array {
+        global $wpdb;
+
+        $codes_table = $wpdb->prefix . 'wh_codes';
+
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT COUNT(*) AS total, "
+                . "SUM(CASE WHEN status = %s THEN 1 ELSE 0 END) AS in_stock, "
+                . "SUM(CASE WHEN status = %s THEN 1 ELSE 0 END) AS shipped, "
+                . "MAX(generated_at) AS latest_generated_at FROM {$codes_table}",
+                'in_stock',
+                'shipped'
+            ),
+            ARRAY_A
+        );
+
+        return [
+            'total'               => isset($row['total']) ? (int) $row['total'] : 0,
+            'in_stock'            => isset($row['in_stock']) ? (int) $row['in_stock'] : 0,
+            'shipped'             => isset($row['shipped']) ? (int) $row['shipped'] : 0,
+            'latest_generated_at' => $row['latest_generated_at'] ?? null,
+        ];
+    }
+
+    private static function get_codes_filters_from_request(): array {
+        $sku_id   = isset($_GET['sku_id']) ? absint($_GET['sku_id']) : 0;
+        $batch_no = isset($_GET['batch_no']) ? sanitize_text_field(wp_unslash($_GET['batch_no'])) : '';
+        $code     = isset($_GET['code']) ? sanitize_text_field(wp_unslash($_GET['code'])) : '';
+        $status   = isset($_GET['status']) ? sanitize_text_field(wp_unslash($_GET['status'])) : 'all';
+        $per_page = isset($_GET['per_page']) ? absint($_GET['per_page']) : 50;
+        $page     = isset($_GET['codes_page']) ? absint($_GET['codes_page']) : 1;
+
+        if (!in_array($per_page, [20, 50, 100], true)) {
+            $per_page = 50;
+        }
+
+        $page = $page >= 1 ? $page : 1;
+
+        if (!in_array($status, ['in_stock', 'shipped'], true)) {
+            $status = 'all';
+        }
+
+        return [
+            'sku_id'  => $sku_id,
+            'batch_no'=> $batch_no,
+            'code'    => $code,
+            'status'  => $status,
+            'per_page'=> $per_page,
+            'page'    => $page,
+        ];
+    }
+
+    private static function query_codes_count(array $filters): int {
+        global $wpdb;
+
+        $codes   = $wpdb->prefix . 'wh_codes';
+        $skus    = $wpdb->prefix . 'wh_skus';
+        $batches = $wpdb->prefix . 'wh_code_batches';
+
+        $where_sql = '';
+        $params = [];
+        $conditions = [];
+
+        if (!empty($filters['sku_id'])) {
+            $conditions[] = 'c.sku_id = %d';
+            $params[] = (int) $filters['sku_id'];
+        }
+
+        if ($filters['batch_no'] !== '') {
+            $conditions[] = 'b.batch_no LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($filters['batch_no']) . '%';
+        }
+
+        if ($filters['code'] !== '') {
+            $conditions[] = 'c.code = %s';
+            $params[] = $filters['code'];
+        }
+
+        if ($filters['status'] !== 'all') {
+            $conditions[] = 'c.status = %s';
+            $params[] = $filters['status'];
+        }
+
+        if (!empty($conditions)) {
+            $where_sql = ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $sql = "SELECT COUNT(*) FROM {$codes} c "
+            . "LEFT JOIN {$skus} s ON c.sku_id = s.id "
+            . "LEFT JOIN {$batches} b ON c.batch_id = b.id"
+            . $where_sql;
+
+        if (!empty($params)) {
+            $prepared = $wpdb->prepare($sql, $params);
+            return (int) $wpdb->get_var($prepared);
+        }
+
+        return (int) $wpdb->get_var($sql);
+    }
+
+    private static function query_codes_page(array $filters, int $per_page, int $page): array {
+        global $wpdb;
+
+        $codes   = $wpdb->prefix . 'wh_codes';
+        $skus    = $wpdb->prefix . 'wh_skus';
+        $batches = $wpdb->prefix . 'wh_code_batches';
+
+        $where_sql = '';
+        $params = [];
+        $conditions = [];
+
+        if (!empty($filters['sku_id'])) {
+            $conditions[] = 'c.sku_id = %d';
+            $params[] = (int) $filters['sku_id'];
+        }
+
+        if ($filters['batch_no'] !== '') {
+            $conditions[] = 'b.batch_no LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($filters['batch_no']) . '%';
+        }
+
+        if ($filters['code'] !== '') {
+            $conditions[] = 'c.code = %s';
+            $params[] = $filters['code'];
+        }
+
+        if ($filters['status'] !== 'all') {
+            $conditions[] = 'c.status = %s';
+            $params[] = $filters['status'];
+        }
+
+        if (!empty($conditions)) {
+            $where_sql = ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $offset = ($page - 1) * $per_page;
+
+        $sql = "SELECT c.code, c.status, c.generated_at, s.sku_code, s.name AS sku_name, b.batch_no FROM {$codes} c "
+            . "LEFT JOIN {$skus} s ON c.sku_id = s.id "
+            . "LEFT JOIN {$batches} b ON c.batch_id = b.id"
+            . $where_sql
+            . " ORDER BY c.id DESC LIMIT %d OFFSET %d";
+
+        $params[] = $per_page;
+        $params[] = $offset;
+
+        $prepared = $wpdb->prepare($sql, $params);
+
+        return (array) $wpdb->get_results($prepared, ARRAY_A);
+    }
+
+    private static function render_codes_pagination(int $total, int $page, int $per_page, array $base_args): string {
+        if ($per_page <= 0) {
+            return '';
+        }
+
+        $total_pages = (int) ceil($total / $per_page);
+
+        if ($total_pages <= 1) {
+            return '';
+        }
+
+        $page = max(1, $page);
+        $page = min($page, $total_pages);
+
+        $html = '<div class="tablenav"><div class="tablenav-pages">';
+        $base_url = add_query_arg($base_args, self::portal_url());
+
+        $html .= '<span class="displaying-num">' . sprintf(esc_html__('Total %d items', 'wind-warehouse'), $total) . '</span>';
+
+        $html .= '<span class="pagination-links">';
+
+        if ($page > 1) {
+            $prev_url = add_query_arg('codes_page', $page - 1, $base_url);
+            $html    .= '<a class="prev-page" href="' . esc_url($prev_url) . '">&laquo;</a>';
+        } else {
+            $html .= '<span class="tablenav-pages-navspan">&laquo;</span>';
+        }
+
+        for ($i = 1; $i <= $total_pages; $i++) {
+            $page_url = add_query_arg('codes_page', $i, $base_url);
+            $class = $i === $page ? ' class="page-numbers current"' : ' class="page-numbers"';
+            $html .= '<a' . $class . ' href="' . esc_url($page_url) . '">' . esc_html((string) $i) . '</a>';
+        }
+
+        if ($page < $total_pages) {
+            $next_url = add_query_arg('codes_page', $page + 1, $base_url);
+            $html    .= '<a class="next-page" href="' . esc_url($next_url) . '">&raquo;</a>';
+        } else {
+            $html .= '<span class="tablenav-pages-navspan">&raquo;</span>';
+        }
+
+        $html .= '</span>';
+        $html .= '</div></div>';
 
         return $html;
     }

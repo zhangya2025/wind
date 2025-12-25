@@ -9,6 +9,7 @@ final class Wind_Warehouse_Query {
     private const LEGACY_SLUG = 'verify';
     private const RATE_LIMIT_MAX = 10;
     private const RATE_LIMIT_WINDOW = MINUTE_IN_SECONDS;
+    private static $table_columns_cache = [];
 
     public static function register_shortcode(): void {
         add_shortcode(self::SHORTCODE, [self::class, 'render_shortcode']);
@@ -78,7 +79,7 @@ final class Wind_Warehouse_Query {
                 return $html;
             }
 
-            if (!preg_match('/^[A-Fa-f0-9]{20}$/', $code_input)) {
+            if (!preg_match('/^[A-Fa-f0-9]{40}$/', $code_input)) {
                 $html .= '<p class="ww-error">' . esc_html__('防伪码格式无效', 'wind-warehouse') . '</p>';
                 $html .= '</div>';
                 return $html;
@@ -98,7 +99,6 @@ final class Wind_Warehouse_Query {
         $code_table   = $wpdb->prefix . 'wh_codes';
         $dealer_table = $wpdb->prefix . 'wh_dealers';
         $sku_table    = $wpdb->prefix . 'wh_skus';
-        $events_table = $wpdb->prefix . 'wh_events';
 
         $wpdb->query('START TRANSACTION');
 
@@ -143,6 +143,41 @@ final class Wind_Warehouse_Query {
             return '<p class="ww-error">' . esc_html__('查询失败，请稍后再试', 'wind-warehouse') . '</p>';
         }
 
+        $event_success = true;
+        $is_unshipped = false;
+        $status = (string) ($code_row['status'] ?? '');
+        $shipped_at = $code_row['shipped_at'] ?? null;
+        if ($status === 'in_stock' || empty($shipped_at)) {
+            $is_unshipped = true;
+        }
+
+        if (!$is_internal && $is_unshipped) {
+            $meta = [
+                'code'      => $code,
+                'code_id'   => $code_row['id'] ?? null,
+                'sku_id'    => $code_row['sku_id'] ?? null,
+                'actor_user_id' => get_current_user_id(),
+                'external'  => true,
+                'actor_ip'  => self::get_request_ip(),
+                'timestamp' => current_time('mysql'),
+                'unshipped' => true,
+            ];
+
+            $event_success = self::insert_event('consumer_query_unshipped', [
+                'code'      => $code,
+                'code_id'   => $code_row['id'] ?? null,
+                'ip'        => self::get_request_ip(),
+                'counted'   => 0,
+                'meta_json' => $meta,
+                'created_at' => current_time('mysql'),
+            ]);
+        }
+
+        if ($event_success === false) {
+            $wpdb->query('ROLLBACK');
+            return '<p class="ww-error">' . esc_html__('查询失败，请稍后再试', 'wind-warehouse') . '</p>';
+        }
+
         $wpdb->query('COMMIT');
 
         $row = $wpdb->get_row(
@@ -159,43 +194,9 @@ final class Wind_Warehouse_Query {
             return '<p class="ww-error">' . esc_html__('未找到防伪码', 'wind-warehouse') . '</p>';
         }
 
-        $is_unshipped = false;
-        $status = (string) ($row['status'] ?? '');
-        $shipped_at = $row['shipped_at'] ?? null;
-        if ($status === 'in_stock' || empty($shipped_at)) {
-            $is_unshipped = true;
-        }
-
         $dealer_display = $row['dealer_name'] ?? '';
         if ($dealer_display === '' || (!$is_internal && $is_unshipped)) {
             $dealer_display = '总部销售';
-        }
-
-        if (!$is_internal && $is_unshipped) {
-            $meta = [
-                'code'      => $code,
-                'code_id'   => $row['id'] ?? null,
-                'sku_id'    => $row['sku_id'] ?? null,
-                'actor_user_id' => get_current_user_id(),
-                'external'  => true,
-                'actor_ip'  => self::get_request_ip(),
-                'timestamp' => current_time('mysql'),
-                'unshipped' => true,
-            ];
-
-            $wpdb->insert(
-                $events_table,
-                [
-                    'event_type' => 'consumer_query_unshipped',
-                    'code'       => $code,
-                    'code_id'    => $row['id'] ?? null,
-                    'ip'         => self::get_request_ip(),
-                    'counted'    => 0,
-                    'meta_json'  => wp_json_encode($meta),
-                    'created_at' => current_time('mysql'),
-                ],
-                ['%s', '%s', '%d', '%s', '%d', '%s', '%s']
-            );
         }
 
         $lifetime = (int) ($row['consumer_query_count_lifetime'] ?? 0);
@@ -281,7 +282,7 @@ final class Wind_Warehouse_Query {
         }
 
         $code = isset($_POST['code']) ? sanitize_text_field(wp_unslash($_POST['code'])) : '';
-        if (!preg_match('/^[A-Fa-f0-9]{20}$/', $code)) {
+        if (!preg_match('/^[A-Fa-f0-9]{40}$/', $code)) {
             wp_safe_redirect(add_query_arg('err', 'invalid_code', $redirect));
             exit;
         }
@@ -297,7 +298,6 @@ final class Wind_Warehouse_Query {
 
         global $wpdb;
         $code_table   = $wpdb->prefix . 'wh_codes';
-        $events_table = $wpdb->prefix . 'wh_events';
 
         $wpdb->query('START TRANSACTION');
 
@@ -313,8 +313,15 @@ final class Wind_Warehouse_Query {
         }
 
         $code_dealer_id = isset($row['dealer_id']) ? (int) $row['dealer_id'] : null;
+        $is_shipped = true;
+        $status = (string) ($row['status'] ?? '');
+        $shipped_at = $row['shipped_at'] ?? null;
+        if ($status === 'in_stock' || empty($shipped_at)) {
+            $is_shipped = false;
+        }
+
         if ($current_dealer_id !== null) {
-            if ($code_dealer_id === null || $code_dealer_id !== (int) $current_dealer_id) {
+            if ($code_dealer_id === null || $code_dealer_id !== (int) $current_dealer_id || !$is_shipped) {
                 $wpdb->query('ROLLBACK');
                 wp_safe_redirect(add_query_arg('err', rawurlencode('无权清零该防伪码'), $redirect));
                 exit;
@@ -351,24 +358,25 @@ final class Wind_Warehouse_Query {
             'B'        => 0,
         ];
 
-        $wpdb->insert(
-            $events_table,
-            [
-                'event_type'  => 'dealer_reset_b',
-                'code'        => $code,
-                'code_id'     => $row['id'],
-                'ip'          => self::get_request_ip(),
-                'counted'     => 0,
-                'meta_before' => wp_json_encode($meta_before),
-                'meta_after'  => wp_json_encode($meta_after),
-                'meta_json'   => wp_json_encode([
-                    'actor_user_id' => get_current_user_id(),
-                    'dealer_id'     => $code_dealer_id,
-                ]),
-                'created_at'  => current_time('mysql'),
+        $event_success = self::insert_event('dealer_reset_b', [
+            'code'        => $code,
+            'code_id'     => $row['id'],
+            'ip'          => self::get_request_ip(),
+            'counted'     => 0,
+            'meta_before' => $meta_before,
+            'meta_after'  => $meta_after,
+            'meta_json'   => [
+                'actor_user_id' => get_current_user_id(),
+                'dealer_id'     => $code_dealer_id,
             ],
-            ['%s', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s']
-        );
+            'created_at'  => current_time('mysql'),
+        ]);
+
+        if ($event_success === false) {
+            $wpdb->query('ROLLBACK');
+            wp_safe_redirect(add_query_arg('err', 'db_error', $redirect));
+            exit;
+        }
 
         $wpdb->query('COMMIT');
 
@@ -413,5 +421,85 @@ final class Wind_Warehouse_Query {
     private static function get_request_ip(): string {
         $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '';
         return substr($ip, 0, 45);
+    }
+
+    private static function get_table_columns(string $table): array {
+        if (isset(self::$table_columns_cache[$table])) {
+            return self::$table_columns_cache[$table];
+        }
+
+        global $wpdb;
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+        if (!is_array($columns)) {
+            $columns = [];
+        }
+
+        self::$table_columns_cache[$table] = $columns;
+        return $columns;
+    }
+
+    private static function insert_event(string $event_type, array $payload): bool {
+        global $wpdb;
+        $table = $wpdb->prefix . 'wh_events';
+        $columns = self::get_table_columns($table);
+
+        if (empty($columns)) {
+            return false;
+        }
+
+        $data = [];
+        $meta_fallback = [];
+        $formats = [];
+        $known_formats = [
+            'event_type'  => '%s',
+            'code'        => '%s',
+            'code_id'     => '%d',
+            'ip'          => '%s',
+            'counted'     => '%d',
+            'meta_before' => '%s',
+            'meta_after'  => '%s',
+            'meta_json'   => '%s',
+            'created_at'  => '%s',
+        ];
+
+        $payload['event_type'] = $event_type;
+
+        foreach ($payload as $key => $value) {
+            $value_to_store = $value;
+            if ($key === 'meta_before' || $key === 'meta_after' || $key === 'meta_json') {
+                $value_to_store = wp_json_encode($value);
+            }
+
+            if (in_array($key, $columns, true)) {
+                $data[$key] = $value_to_store;
+                $formats[]  = $known_formats[$key] ?? '%s';
+            } else {
+                $meta_fallback[$key] = $value;
+            }
+        }
+
+        if (in_array('meta_json', $columns, true)) {
+            $existing_meta = [];
+            if (isset($data['meta_json'])) {
+                $decoded = json_decode((string) $data['meta_json'], true);
+                if (is_array($decoded)) {
+                    $existing_meta = $decoded;
+                }
+            }
+
+            $data['meta_json'] = wp_json_encode(array_merge($existing_meta, $meta_fallback));
+            if (!array_key_exists('meta_json', $known_formats)) {
+                $known_formats['meta_json'] = '%s';
+            }
+            if (!isset($payload['meta_json'])) {
+                $formats[] = $known_formats['meta_json'];
+            }
+        }
+
+        if (!isset($data['event_type'])) {
+            return false;
+        }
+
+        return $wpdb->insert($table, $data, $formats) !== false;
     }
 }

@@ -26,6 +26,7 @@ final class Wind_Warehouse_Plugin {
                 'wh_ship_codes',
                 'wh_view_reports',
                 'wh_reset_consumer_count_internal',
+                'upload_files',
                 'read',
             ],
         ],
@@ -50,6 +51,7 @@ final class Wind_Warehouse_Plugin {
         add_action('init', [self::class, 'register_shortcodes']);
         add_action('admin_init', [self::class, 'maybe_ensure_portal_page']);
         add_action('admin_init', [self::class, 'maybe_redirect_from_admin']);
+        add_action('wp_enqueue_scripts', [self::class, 'enqueue_front_assets']);
         add_filter('login_redirect', [self::class, 'filter_login_redirect'], 10, 3);
     }
 
@@ -114,6 +116,45 @@ final class Wind_Warehouse_Plugin {
                 }
             }
         }
+    }
+
+    public static function enqueue_front_assets(): void {
+        if (!is_user_logged_in()) {
+            return;
+        }
+
+        $target_page_slug = 'warehouse';
+        $is_target_page   = is_page($target_page_slug);
+
+        if (!$is_target_page) {
+            $target_page = get_page_by_path($target_page_slug);
+            if ($target_page instanceof WP_Post) {
+                $is_target_page = is_page($target_page);
+            }
+        }
+
+        if (!$is_target_page) {
+            return;
+        }
+
+        if (!isset($_GET['wh']) || sanitize_text_field(wp_unslash($_GET['wh'])) !== 'dealers') {
+            return;
+        }
+
+        if (!current_user_can('wh_manage_dealers')) {
+            return;
+        }
+
+        wp_enqueue_media();
+
+        $script_handle = 'ww-portal-dealers-media';
+        wp_enqueue_script(
+            $script_handle,
+            plugin_dir_url(self::$plugin_file) . 'assets/ww-portal-dealers-media.js',
+            ['media-editor'],
+            null,
+            true
+        );
     }
 
     public static function maybe_redirect_from_admin(): void {

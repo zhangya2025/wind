@@ -1052,6 +1052,18 @@ final class Wind_Warehouse_Portal {
         global $wpdb;
         $table = $wpdb->prefix . 'wh_dealers';
 
+        $success_message = '';
+        if (isset($_GET['msg'])) {
+            $msg = sanitize_text_field(wp_unslash($_GET['msg']));
+            if ($msg === 'enabled') {
+                $success_message = __('Dealer enabled.', 'wind-warehouse');
+            } elseif ($msg === 'disabled') {
+                $success_message = __('Dealer disabled.', 'wind-warehouse');
+            } elseif ($msg === 'created') {
+                $success_message = __('Dealer created.', 'wind-warehouse');
+            }
+        }
+
         $dealers = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT id, dealer_code, name, phone, address, contact_name, intro, authorized_from, authorized_to, business_license_attachment_id, authorization_letter_attachment_id, status, created_at, updated_at FROM {$table} ORDER BY id DESC LIMIT %d",
@@ -1063,11 +1075,10 @@ final class Wind_Warehouse_Portal {
         $form_action   = add_query_arg('wh', 'dealers', self::portal_url());
         $toggle_action = $form_action;
 
-        if (function_exists('wp_enqueue_media')) {
-            wp_enqueue_media();
-        }
-
         $html  = '<div class="ww-dealers">';
+        if ($success_message !== '') {
+            $html .= '<div class="notice notice-success"><p>' . esc_html($success_message) . '</p></div>';
+        }
         if ($error_message !== null) {
             $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
         }
@@ -1152,40 +1163,10 @@ final class Wind_Warehouse_Portal {
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="7">' . esc_html__('No dealers found.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="11">' . esc_html__('No dealers found.', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';
-        $html .= '<script type="text/javascript">(function(){\n';
-        $html .= 'function initMediaSelector(config){\n';
-        $html .= '  var input = document.getElementById(config.inputId);\n';
-        $html .= '  var button = document.getElementById(config.buttonId);\n';
-        $html .= '  var removeButton = document.getElementById(config.removeButtonId);\n';
-        $html .= '  var preview = document.getElementById(config.previewId);\n';
-        $html .= '  if(!input || !button || !removeButton || !preview || typeof wp === "undefined" || !wp.media){return;}\n';
-        $html .= '  var frame;\n';
-        $html .= '  button.addEventListener("click", function(){\n';
-        $html .= '    if(frame){frame.open();return;}\n';
-        $html .= '    frame = wp.media({title: config.title, button: {text: config.buttonText}, library: {type: "image"}, multiple: false});\n';
-        $html .= '    frame.on("select", function(){\n';
-        $html .= '      var attachment = frame.state().get("selection").first().toJSON();\n';
-        $html .= '      input.value = attachment.id;\n';
-        $html .= '      var previewUrl = attachment.url;\n';
-        $html .= '      if(attachment.sizes && attachment.sizes.thumbnail && attachment.sizes.thumbnail.url){\n';
-        $html .= '        previewUrl = attachment.sizes.thumbnail.url;\n';
-        $html .= '      }\n';
-        $html .= '      preview.innerHTML = "<img src=\\"" + previewUrl + "\\" alt=\\"" + config.previewAlt + "\\" style=\\"max-width:120px;height:auto;\\" />";\n';
-        $html .= '    });\n';
-        $html .= '    frame.open();\n';
-        $html .= '  });\n';
-        $html .= '  removeButton.addEventListener("click", function(){\n';
-        $html .= '    input.value = "";\n';
-        $html .= '    preview.innerHTML = "";\n';
-        $html .= '  });\n';
-        $html .= '}\n';
-        $html .= 'initMediaSelector({inputId:"ww_business_license_attachment_id", buttonId:"ww_business_license_button", removeButtonId:"ww_business_license_remove", previewId:"ww_business_license_preview", title:"' . esc_js(__('Select Business License', 'wind-warehouse')) . '", buttonText:"' . esc_js(__('Use this image', 'wind-warehouse')) . '", previewAlt:"' . esc_js(__('Business License Preview', 'wind-warehouse')) . '"});\n';
-        $html .= 'initMediaSelector({inputId:"ww_authorization_letter_attachment_id", buttonId:"ww_authorization_letter_button", removeButtonId:"ww_authorization_letter_remove", previewId:"ww_authorization_letter_preview", title:"' . esc_js(__('Select Authorization Letter', 'wind-warehouse')) . '", buttonText:"' . esc_js(__('Use this image', 'wind-warehouse')) . '", previewAlt:"' . esc_js(__('Authorization Letter Preview', 'wind-warehouse')) . '"});\n';
-        $html .= '})();</script>';
         $html .= '</div>';
 
         return $html;

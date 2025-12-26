@@ -274,22 +274,83 @@ final class Wind_Warehouse_Portal {
             ARRAY_A
         );
 
+        $dealer_data = [];
+        if (is_array($dealer_options)) {
+            foreach ($dealer_options as $dealer) {
+                $label = trim((string) ($dealer['dealer_code'] ?? '') . ' ' . (string) ($dealer['name'] ?? ''));
+                $dealer_data[] = [
+                    'id'     => (int) $dealer['id'],
+                    'label'  => $label,
+                    'search' => strtolower($label),
+                ];
+            }
+        }
+
+        $sku_data = [];
+        if (is_array($sku_options)) {
+            foreach ($sku_options as $sku) {
+                $label = trim((string) ($sku['sku_code'] ?? '') . ' ' . (string) ($sku['name'] ?? '') . ' ' . (string) ($sku['color'] ?? '') . ' ' . (string) ($sku['size'] ?? ''));
+                $sku_data[] = [
+                    'id'     => (int) $sku['id'],
+                    'label'  => $label,
+                    'search' => strtolower($label),
+                ];
+            }
+        }
+
         $current_page = max(1, (int) $filters['paged']);
         $per_page     = (int) $filters['per_page'];
         $total_pages  = (int) max(1, ceil($total / $per_page));
 
+        $script_url = plugins_url('assets/ww-reports-selectors.js', dirname(__DIR__) . '/wind-warehouse.php');
+
+        $range_defaults = [];
+        foreach (['1m', '3m', '1y'] as $preset) {
+            [$preset_start, $preset_end] = self::resolve_report_dates($preset, '', '');
+            $range_defaults[$preset] = [
+                'start' => $preset_start,
+                'end'   => $preset_end,
+            ];
+        }
+
         $html  = '<div class="ww-reports">';
+        $html .= '<style>'
+            . '.ww-reports .ww-ms{border:1px solid #ccc;padding:8px;margin:8px 0;border-radius:4px;}'
+            . '.ww-reports .ww-ms .ww-ms-search{width:100%;padding:6px;box-sizing:border-box;}'
+            . '.ww-reports .ww-ms .ww-ms-actions{display:flex;align-items:center;gap:8px;margin:6px 0;}'
+            . '.ww-reports .ww-ms .ww-ms-selected{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;}'
+            . '.ww-reports .ww-ms .ww-chip{background:#f0f0f0;border:1px solid #ccc;border-radius:12px;padding:4px 8px;display:inline-flex;align-items:center;gap:6px;}'
+            . '.ww-reports .ww-ms .ww-chip button{border:none;background:transparent;cursor:pointer;font-size:12px;line-height:1;}'
+            . '.ww-reports .ww-ms .ww-ms-results{border:1px solid #e0e0e0;max-height:200px;overflow:auto;padding:4px;margin-top:6px;}'
+            . '.ww-reports .ww-ms .ww-option{padding:4px;cursor:pointer;}'
+            . '.ww-reports .ww-ms .ww-option.selected{background:#eef5ff;}'
+            . '.ww-reports .ww-ms .ww-option:hover{background:#eef5ff;}'
+            . '.ww-reports .ww-filter-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;}'
+            . '.ww-reports .ww-filter-row label{display:flex;flex-direction:column;font-weight:600;gap:4px;}'
+            . '.ww-reports .ww-filter-actions{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}'
+            . '.ww-reports .ww-effective{margin:8px 0;font-style:italic;}'
+            . '</style>';
+
         $html .= '<h2>' . esc_html__('Reports', 'wind-warehouse') . '</h2>';
 
         if ($error_message !== null) {
             $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
         }
+        $html .= '</select></label> ';
 
-        $html .= '<form method="get" class="ww-report-filters" style="margin: 12px 0;">';
+        if (!empty($filters['date_notice'])) {
+            $html .= '<div class="notice notice-warning"><p>' . esc_html($filters['date_notice']) . '</p></div>';
+        }
+        $html .= '</select></label> ';
+
+        $html .= '<form method="get" class="ww-report-filters" id="ww-report-filters" style="margin: 12px 0;">';
         $html .= '<input type="hidden" name="wh" value="reports" />';
+        $html .= '<input type="hidden" name="paged" value="1" />';
+        $html .= '<input type="hidden" name="apply" value="1" />';
 
+        $html .= '<div class="ww-filter-row">';
         $html .= '<label>' . esc_html__('Range', 'wind-warehouse') . ' ';
-        $html .= '<select name="range">';
+        $html .= '<select name="range" id="ww-report-range">';
         $ranges = [
             '1m'     => __('Last 1 month', 'wind-warehouse'),
             '3m'     => __('Last 3 months', 'wind-warehouse'),
@@ -300,30 +361,11 @@ final class Wind_Warehouse_Portal {
             $selected = $filters['range'] === $key ? ' selected' : '';
             $html .= '<option value="' . esc_attr($key) . '"' . $selected . '>' . esc_html($label) . '</option>';
         }
-        $html .= '</select></label> ';
+        $html .= '</select></label>';
 
-        $html .= '<label>' . esc_html__('Start date', 'wind-warehouse') . ' <input type="date" name="start_date" value="' . esc_attr($filters['start_date']) . '" /></label> ';
-        $html .= '<label>' . esc_html__('End date', 'wind-warehouse') . ' <input type="date" name="end_date" value="' . esc_attr($filters['end_date']) . '" /></label> ';
-
-        $html .= '<label>' . esc_html__('Dealers', 'wind-warehouse') . ' <select multiple name="dealer_ids[]">';
-        if (is_array($dealer_options)) {
-            foreach ($dealer_options as $dealer) {
-                $selected = in_array((int) $dealer['id'], $filters['dealer_ids'], true) ? ' selected' : '';
-                $label = trim((string) ($dealer['dealer_code'] ?? '') . ' ' . (string) ($dealer['name'] ?? ''));
-                $html .= '<option value="' . esc_attr((string) $dealer['id']) . '"' . $selected . '>' . esc_html($label) . '</option>';
-            }
-        }
-        $html .= '</select></label> ';
-
-        $html .= '<label>' . esc_html__('SKUs', 'wind-warehouse') . ' <select multiple name="sku_ids[]">';
-        if (is_array($sku_options)) {
-            foreach ($sku_options as $sku) {
-                $selected = in_array((int) $sku['id'], $filters['sku_ids'], true) ? ' selected' : '';
-                $label = trim((string) ($sku['sku_code'] ?? '') . ' ' . (string) ($sku['name'] ?? '') . ' ' . (string) ($sku['color'] ?? '') . ' ' . (string) ($sku['size'] ?? ''));
-                $html .= '<option value="' . esc_attr((string) $sku['id']) . '"' . $selected . '>' . esc_html($label) . '</option>';
-            }
-        }
-        $html .= '</select></label> ';
+        $date_readonly = $filters['range'] === 'custom' ? '' : ' readonly';
+        $html .= '<label>' . esc_html__('Start date', 'wind-warehouse') . ' <input type="date" id="ww-report-start" name="start_date" value="' . esc_attr($filters['start_date']) . '"' . $date_readonly . ' /></label>';
+        $html .= '<label>' . esc_html__('End date', 'wind-warehouse') . ' <input type="date" id="ww-report-end" name="end_date" value="' . esc_attr($filters['end_date']) . '"' . $date_readonly . ' /></label>';
 
         $html .= '<label>' . esc_html__('Sort', 'wind-warehouse') . ' <select name="sort">';
         $sort_options = [
@@ -334,26 +376,74 @@ final class Wind_Warehouse_Portal {
             $selected = $filters['sort'] === $key ? ' selected' : '';
             $html .= '<option value="' . esc_attr($key) . '"' . $selected . '>' . esc_html($label) . '</option>';
         }
-        $html .= '</select></label> ';
+        $html .= '</select></label>';
 
         $html .= '<label>' . esc_html__('Per page', 'wind-warehouse') . ' <select name="per_page">';
         foreach ([20, 50, 100] as $pp) {
             $selected = (int) $filters['per_page'] === $pp ? ' selected' : '';
             $html .= '<option value="' . esc_attr((string) $pp) . '"' . $selected . '>' . esc_html((string) $pp) . '</option>';
         }
-        $html .= '</select></label> ';
+        $html .= '</select></label>';
+        $html .= '</div>';
 
-        $html .= '<button type="submit">' . esc_html__('Apply', 'wind-warehouse') . '</button>';
+        $html .= '<div class="ww-ms" data-type="dealers" data-name="dealer_ids[]" data-selected="' . esc_attr(implode(',', $filters['dealer_ids'])) . '">';
+        $html .= '<div class="ww-ms-actions"><strong>' . esc_html__('Dealers', 'wind-warehouse') . '</strong><button type="button" data-action="all">' . esc_html__('All', 'wind-warehouse') . '</button><button type="button" data-action="none">' . esc_html__('None', 'wind-warehouse') . '</button><span class="ww-ms-count"></span></div>';
+        $html .= '<input class="ww-ms-search" type="text" placeholder="' . esc_attr__('Search dealers…', 'wind-warehouse') . '" />';
+        $html .= '<div class="ww-ms-selected"></div>';
+        $html .= '<div class="ww-ms-results"></div>';
+        $html .= '<div class="ww-ms-hidden">';
+        foreach ($filters['dealer_ids'] as $dealer_id) {
+            $html .= '<input type="hidden" name="dealer_ids[]" value="' . esc_attr((string) $dealer_id) . '" />';
+        }
+        $html .= '</div>';
+        $html .= '</div>';
+
+        $html .= '<div class="ww-ms" data-type="skus" data-name="sku_ids[]" data-selected="' . esc_attr(implode(',', $filters['sku_ids'])) . '">';
+        $html .= '<div class="ww-ms-actions"><strong>' . esc_html__('SKUs', 'wind-warehouse') . '</strong><button type="button" data-action="all">' . esc_html__('All', 'wind-warehouse') . '</button><button type="button" data-action="none">' . esc_html__('None', 'wind-warehouse') . '</button><span class="ww-ms-count"></span></div>';
+        $html .= '<input class="ww-ms-search" type="text" placeholder="' . esc_attr__('Search SKUs…', 'wind-warehouse') . '" />';
+        $html .= '<div class="ww-ms-selected"></div>';
+        $html .= '<div class="ww-ms-results"></div>';
+        $html .= '<div class="ww-ms-hidden">';
+        foreach ($filters['sku_ids'] as $sku_id) {
+            $html .= '<input type="hidden" name="sku_ids[]" value="' . esc_attr((string) $sku_id) . '" />';
+        }
+        $html .= '</div>';
+        $html .= '</div>';
+
+        $html .= '<div class="ww-filter-actions">';
+        $html .= '<button type="submit" class="button button-primary">' . esc_html__('Apply', 'wind-warehouse') . '</button>';
+        $clear_url = add_query_arg(
+            [
+                'wh'       => 'reports',
+                'range'    => '1m',
+                'per_page' => 50,
+                'sort'     => 'qty_desc',
+            ],
+            self::portal_url()
+        );
+        $html .= '<a class="button" href="' . esc_url($clear_url) . '">' . esc_html__('Clear filters', 'wind-warehouse') . '</a>';
+        $html .= '<span>' . esc_html__('Selected dealers', 'wind-warehouse') . ': ' . esc_html((string) count($filters['dealer_ids'])) . ' | ' . esc_html__('Selected SKUs', 'wind-warehouse') . ': ' . esc_html((string) count($filters['sku_ids'])) . '</span>';
+        $html .= '</div>';
         $html .= '</form>';
 
-        $html .= '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin: 12px 0;">';
+        $html .= '<form method="post" id="ww-report-export" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin: 12px 0;">';
         $html .= '<input type="hidden" name="action" value="ww_reports_export" />';
         $html .= '<input type="hidden" name="ww_nonce" value="' . esc_attr(wp_create_nonce('ww_reports_export')) . '" />';
-        $html .= self::render_report_hidden_fields($filters);
-        $html .= '<button type="submit">' . esc_html__('Export CSV', 'wind-warehouse') . '</button>';
+        $html .= self::render_report_hidden_fields($filters, ['dealer_ids', 'sku_ids']);
+        $html .= '<div class="ww-export-dealers">';
+        foreach ($filters['dealer_ids'] as $dealer_id) {
+            $html .= '<input type="hidden" name="dealer_ids[]" value="' . esc_attr((string) $dealer_id) . '" />';
+        }
+        $html .= '</div>';
+        $html .= '<div class="ww-export-skus">';
+        foreach ($filters['sku_ids'] as $sku_id) {
+            $html .= '<input type="hidden" name="sku_ids[]" value="' . esc_attr((string) $sku_id) . '" />';
+        }
+        $html .= '</div>';
+        $html .= '<button type="submit" class="button">' . esc_html__('Export CSV', 'wind-warehouse') . '</button>';
         $html .= '</form>';
 
-        $html .= '<p>' . esc_html__('Range', 'wind-warehouse') . ': ' . esc_html($filters['start_date']) . ' ~ ' . esc_html($filters['end_date']) . '</p>';
+        $html .= '<p class="ww-effective">' . esc_html__('Effective range', 'wind-warehouse') . ': ' . esc_html($filters['start_date']) . ' ~ ' . esc_html($filters['end_date']) . '</p>';
         $html .= '<p>' . esc_html__('Total SKUs', 'wind-warehouse') . ': ' . esc_html((string) $total) . ' | ' . esc_html__('Page', 'wind-warehouse') . ' ' . esc_html((string) $current_page) . ' / ' . esc_html((string) $total_pages) . '</p>';
 
         $html .= '<table class="ww-table"><thead><tr>';
@@ -370,11 +460,24 @@ final class Wind_Warehouse_Portal {
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="2">' . esc_html__('No records.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="2">' . esc_html__('No data for selected filters.', 'wind-warehouse') . '</td></tr>';
         }
         $html .= '</tbody></table>';
 
         $html .= self::render_reports_pagination($filters, $total_pages);
+
+        $html .= '<script>window.WW_REPORTS_DATA = ' . wp_json_encode(['dealers' => $dealer_data, 'skus' => $sku_data], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) . ';';
+        $html .= 'window.WW_REPORTS_STATE = ' . wp_json_encode(
+            [
+                'selected'       => ['dealers' => $filters['dealer_ids'], 'skus' => $filters['sku_ids']],
+                'rangeDefaults'  => $range_defaults,
+                'currentRange'   => $filters['range'],
+                'currentStart'   => $filters['start_date'],
+                'currentEnd'     => $filters['end_date'],
+            ],
+            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+        ) . ';</script>';
+        $html .= '<script src="' . esc_url($script_url) . '"></script>';
 
         $html .= '</div>';
         return $html;
@@ -471,9 +574,9 @@ final class Wind_Warehouse_Portal {
     }
 
     private static function parse_reports_filters(array $source): array {
-        $range = isset($source['range']) ? sanitize_text_field(wp_unslash($source['range'])) : '1m';
-        if (!in_array($range, ['1m', '3m', '1y', 'custom'], true)) {
-            $range = '1m';
+        $input_range = isset($source['range']) ? sanitize_text_field(wp_unslash($source['range'])) : '1m';
+        if (!in_array($input_range, ['1m', '3m', '1y', 'custom'], true)) {
+            $input_range = '1m';
         }
 
         $per_page = isset($source['per_page']) ? absint($source['per_page']) : 50;
@@ -485,22 +588,22 @@ final class Wind_Warehouse_Portal {
         if ($paged < 1) {
             $paged = 1;
         }
+        if (isset($source['apply'])) {
+            $paged = 1;
+        }
 
         $sort = isset($source['sort']) ? sanitize_text_field(wp_unslash($source['sort'])) : 'qty_desc';
         if (!in_array($sort, ['qty_desc', 'sku_asc'], true)) {
             $sort = 'qty_desc';
         }
 
-        $dealer_ids = isset($source['dealer_ids']) ? array_map('absint', (array) $source['dealer_ids']) : [];
-        $dealer_ids = array_values(array_filter($dealer_ids, static function ($id) { return $id > 0; }));
-
-        $sku_ids = isset($source['sku_ids']) ? array_map('absint', (array) $source['sku_ids']) : [];
-        $sku_ids = array_values(array_filter($sku_ids, static function ($id) { return $id > 0; }));
+        $dealer_ids = self::parse_report_ids($source, 'dealer_ids');
+        $sku_ids    = self::parse_report_ids($source, 'sku_ids');
 
         $start_date_input = isset($source['start_date']) ? sanitize_text_field(wp_unslash($source['start_date'])) : '';
         $end_date_input   = isset($source['end_date']) ? sanitize_text_field(wp_unslash($source['end_date'])) : '';
 
-        [$start_date, $end_date] = self::resolve_report_dates($range, $start_date_input, $end_date_input);
+        [$start_date, $end_date, $date_notice, $normalized_range] = self::resolve_report_dates($input_range, $start_date_input, $end_date_input);
 
         $tz = wp_timezone();
         $start_dt = date_create_from_format('Y-m-d H:i:s', $start_date . ' 00:00:00', $tz);
@@ -513,7 +616,7 @@ final class Wind_Warehouse_Portal {
         $end_ts   = $end_dt instanceof DateTime ? $end_dt->format('Y-m-d H:i:s') : $end_date . ' 00:00:00';
 
         return [
-            'range'      => $range,
+            'range'      => $normalized_range,
             'start_date' => $start_date,
             'end_date'   => $end_date,
             'start_ts'   => $start_ts,
@@ -523,7 +626,27 @@ final class Wind_Warehouse_Portal {
             'dealer_ids' => $dealer_ids,
             'sku_ids'    => $sku_ids,
             'sort'       => $sort,
+            'date_notice'=> $date_notice,
         ];
+    }
+
+    private static function parse_report_ids(array $source, string $key): array {
+        $raw_value = $source[$key] ?? [];
+        if (is_string($raw_value) && strpos($raw_value, ',') !== false) {
+            $raw_value = explode(',', $raw_value);
+        }
+
+        $ids = array_map('absint', (array) $raw_value);
+        $ids = array_values(array_filter($ids, static function ($id) {
+            return $id > 0;
+        }));
+        $ids = array_values(array_unique($ids));
+
+        if (count($ids) > 500) {
+            $ids = array_slice($ids, 0, 500);
+        }
+
+        return $ids;
     }
 
     private static function resolve_report_dates(string $range, string $start_input, string $end_input): array {
@@ -533,37 +656,45 @@ final class Wind_Warehouse_Portal {
 
         $start_date = $today->format('Y-m-d');
         $end_date   = $today->format('Y-m-d');
+        $notice     = '';
+        $normalized_range = $range;
 
         if ($range === 'custom') {
-            if (!self::is_valid_date($start_input)) {
-                $start_input = $start_date;
-            }
-            if (!self::is_valid_date($end_input)) {
-                $end_input = $end_date;
-            }
+            $start_valid = self::is_valid_date($start_input);
+            $end_valid   = self::is_valid_date($end_input);
 
-            $start_dt = date_create_from_format('Y-m-d', $start_input, $tz) ?: clone $today;
-            $end_dt   = date_create_from_format('Y-m-d', $end_input, $tz) ?: clone $today;
-
-            if ($start_dt > $end_dt) {
-                [$start_dt, $end_dt] = [$end_dt, $start_dt];
+            if (!$start_valid || !$end_valid) {
+                $normalized_range = '1m';
+                $notice = __('Invalid custom dates. Defaulted to last 1 month.', 'wind-warehouse');
             }
 
-            $start_date = $start_dt->format('Y-m-d');
-            $end_date   = $end_dt->format('Y-m-d');
-        } else {
+            if ($normalized_range === 'custom') {
+                $start_dt = date_create_from_format('Y-m-d', $start_input, $tz) ?: clone $today;
+                $end_dt   = date_create_from_format('Y-m-d', $end_input, $tz) ?: clone $today;
+
+                if ($start_dt > $end_dt) {
+                    [$start_dt, $end_dt] = [$end_dt, $start_dt];
+                }
+
+                $start_date = $start_dt->format('Y-m-d');
+                $end_date   = $end_dt->format('Y-m-d');
+            }
+        }
+
+        if ($normalized_range !== 'custom') {
             $start_dt = clone $today;
-            if ($range === '3m') {
+            if ($normalized_range === '3m') {
                 $start_dt->modify('-3 months');
-            } elseif ($range === '1y') {
+            } elseif ($normalized_range === '1y') {
                 $start_dt->modify('-1 year');
             } else {
                 $start_dt->modify('-1 month');
             }
             $start_date = $start_dt->format('Y-m-d');
+            $end_date   = $today->format('Y-m-d');
         }
 
-        return [$start_date, $end_date];
+        return [$start_date, $end_date, $notice, $normalized_range];
     }
 
     private static function is_valid_date(string $date): bool {

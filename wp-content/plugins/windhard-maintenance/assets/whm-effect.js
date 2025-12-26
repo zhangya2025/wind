@@ -39,8 +39,10 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
     }
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false }) ||
-        canvas.getContext('experimental-webgl', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
+    const glAttributes = { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false };
+    const gl2 = canvas.getContext('webgl2', glAttributes);
+    const gl = gl2 || canvas.getContext('webgl', glAttributes) || canvas.getContext('experimental-webgl', glAttributes);
+    const isWebGL2 = !!gl2;
 
     function resize() {
         const width = Math.floor(window.innerWidth * dpr);
@@ -61,6 +63,17 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         fallback2D();
         return;
     }
+
+    if (!isWebGL2) {
+        const deriv = gl.getExtension('OES_standard_derivatives');
+        if (!deriv) {
+            showError('EFFECT INIT FAILED', 'MISSING_EXT: OES_standard_derivatives');
+            fallback2D();
+            return;
+        }
+    }
+
+    console.log('[WHM] WEBGL2', isWebGL2, 'GLSL', gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
 
     resize();
     window.addEventListener('resize', resize);
@@ -106,7 +119,15 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         return program;
     }
 
-    const vertexSrc = `
+    const vertexSrc = isWebGL2 ? `
+        #version 300 es
+        in vec2 a_position;
+        out vec2 v_uv;
+        void main() {
+            v_uv = a_position * 0.5 + 0.5;
+            gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+    ` : `
         attribute vec2 a_position;
         varying vec2 v_uv;
         void main() {
@@ -115,9 +136,16 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         }
     `;
 
-    const fragmentSrc = `
+    const fragmentHeader = isWebGL2 ? `#version 300 es
+        precision highp float;
+        in vec2 v_uv;
+        out vec4 outColor;
+    ` : `#extension GL_OES_standard_derivatives : enable
         precision highp float;
         varying vec2 v_uv;
+    `;
+
+    const fragmentBody = `
         uniform vec2 u_resolution;
         uniform float u_time;
         uniform float u_reduce;
@@ -228,6 +256,8 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             gl_FragColor = vec4(col, 1.0);
         }
     `;
+
+    const fragmentSrc = fragmentHeader + fragmentBody.replace(/gl_FragColor/g, isWebGL2 ? 'outColor' : 'gl_FragColor');
 
     let program;
     try {

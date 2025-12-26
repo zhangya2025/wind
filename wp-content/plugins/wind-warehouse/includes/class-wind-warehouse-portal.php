@@ -336,10 +336,12 @@ final class Wind_Warehouse_Portal {
         if ($error_message !== null) {
             $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
         }
+        $html .= '</select></label> ';
 
         if (!empty($filters['date_notice'])) {
             $html .= '<div class="notice notice-warning"><p>' . esc_html($filters['date_notice']) . '</p></div>';
         }
+        $html .= '</select></label> ';
 
         $html .= '<form method="get" class="ww-report-filters" id="ww-report-filters" style="margin: 12px 0;">';
         $html .= '<input type="hidden" name="wh" value="reports" />';

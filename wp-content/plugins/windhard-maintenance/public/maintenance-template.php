@@ -1,6 +1,6 @@
 <?php
 /**
- * Blizzard maintenance template.
+ * Maintenance template with external effect loader.
  */
 
 if (!defined('ABSPATH')) {
@@ -28,7 +28,12 @@ $subhead_size = isset($subhead_size_map[$options['subhead_size']]) ? $subhead_si
 $headline_color = !empty($options['headline_color']) ? $options['headline_color'] : '#FFFFFF';
 $subhead_color = !empty($options['subhead_color']) ? $options['subhead_color'] : '#FFFFFF';
 
-?><!DOCTYPE html>
+$plugin_root_file = dirname(__DIR__) . '/windhard-maintenance.php';
+$effect_file = dirname(__DIR__) . '/assets/whm-effect.js';
+$effect_src = plugins_url('assets/whm-effect.js', $plugin_root_file);
+$effect_version = file_exists($effect_file) ? filemtime($effect_file) : time();
+?>
+<!DOCTYPE html>
 <html <?php language_attributes(); ?>>
 <head>
     <meta charset="<?php bloginfo('charset'); ?>" />
@@ -43,25 +48,18 @@ $subhead_color = !empty($options['subhead_color']) ? $options['subhead_color'] :
             padding: 0;
             width: 100%;
             height: 100%;
-            background: #0b1625;
+            background: radial-gradient(circle at 20% 20%, #0a1a2d 0%, #081422 40%, #060f1b 80%);
             color: #fff;
             font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
             overflow: hidden;
         }
-        #whm-blizzard {
+        #whm-effect {
             position: fixed;
             inset: 0;
             width: 100%;
             height: 100%;
             display: block;
-        }
-        .whm-overlay {
-            position: fixed;
-            inset: 0;
-            background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.08), transparent 35%),
-                        radial-gradient(circle at 80% 10%, rgba(255,255,255,0.06), transparent 30%),
-                        linear-gradient(135deg, rgba(0,0,0,0.5), rgba(0,0,0,0.3));
-            pointer-events: none;
+            background: linear-gradient(180deg, #0d1c2f 0%, #050c17 100%);
         }
         .whm-layer {
             position: fixed;
@@ -72,12 +70,12 @@ $subhead_color = !empty($options['subhead_color']) ? $options['subhead_color'] :
             text-align: center;
         }
         .whm-loading {
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(0, 0, 0, 0.45);
             color: #e5e7eb;
             font-size: 18px;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            transition: opacity 0.4s ease;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
         }
         .whm-loading.hidden {
             opacity: 0;
@@ -85,6 +83,7 @@ $subhead_color = !empty($options['subhead_color']) ? $options['subhead_color'] :
         }
         .whm-foreground {
             pointer-events: none;
+            padding: 24px;
         }
         .whm-text {
             display: flex;
@@ -103,23 +102,35 @@ $subhead_color = !empty($options['subhead_color']) ? $options['subhead_color'] :
             font-weight: 500;
             line-height: 1.4;
         }
-        .whm-reduced #whm-blizzard {
+        .whm-reduced #whm-effect {
             display: none;
         }
-        .whm-reduced .whm-overlay {
-            background: linear-gradient(180deg, rgba(7, 18, 36, 0.95), rgba(10, 25, 48, 0.92));
+        .whm-error {
+            pointer-events: none;
+            color: #ff4d6d;
+            font-size: 20px;
+            font-weight: 700;
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
         }
-        @media (max-width: 600px) {
-            .whm-text {
-                gap: 10px;
-            }
+        .hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        .whm-watermark {
+            position: fixed;
+            right: 12px;
+            bottom: 10px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <canvas id="whm-blizzard" aria-hidden="true"></canvas>
-    <div class="whm-overlay" aria-hidden="true"></div>
+    <canvas id="whm-effect" aria-hidden="true"></canvas>
     <div id="whm-loading" class="whm-layer whm-loading">Loading…</div>
+    <div id="whm-effect-error" class="whm-layer whm-error hidden">EFFECT NOT LOADED</div>
     <div class="whm-layer whm-foreground">
         <div class="whm-text">
             <div class="whm-headline" style="color: <?php echo esc_attr($headline_color); ?>; font-size: <?php echo esc_attr($headline_size); ?>;">
@@ -132,105 +143,23 @@ $subhead_color = !empty($options['subhead_color']) ? $options['subhead_color'] :
             <?php endif; ?>
         </div>
     </div>
+    <div id="whm-effect-watermark" class="whm-watermark">EFFECT_EXPECTED: (pending)</div>
+    <script src="<?php echo esc_url($effect_src); ?>?v=<?php echo esc_attr($effect_version); ?>" defer></script>
     <script>
-        (function() {
-            const body = document.body;
-            const canvas = document.getElementById('whm-blizzard');
-            const loading = document.getElementById('whm-loading');
-            const prefersReduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-            if (!canvas || !canvas.getContext || prefersReduce) {
-                body.classList.add('whm-reduced');
-                if (loading) {
-                    loading.classList.add('hidden');
+        setTimeout(function() {
+            if (!window.__WHM_EFFECT_VERSION) {
+                var err = document.getElementById('whm-effect-error');
+                if (err) {
+                    err.textContent = 'EFFECT NOT LOADED';
+                    err.classList.remove('hidden');
                 }
-                return;
+                var loading = document.getElementById('whm-loading');
+                if (loading) {
+                    loading.textContent = 'EFFECT NOT LOADED';
+                    loading.classList.remove('hidden');
+                }
             }
-
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                body.classList.add('whm-reduced');
-                if (loading) {
-                    loading.classList.add('hidden');
-                }
-                return;
-            }
-
-            let width = 0;
-            let height = 0;
-            const snowflakes = [];
-
-            const resize = () => {
-                const dpr = window.devicePixelRatio || 1;
-                width = window.innerWidth;
-                height = window.innerHeight;
-                canvas.width = Math.floor(width * dpr);
-                canvas.height = Math.floor(height * dpr);
-                canvas.style.width = width + 'px';
-                canvas.style.height = height + 'px';
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-                const desired = Math.min(400, Math.floor((width * height) / 8000));
-                snowflakes.length = desired;
-                for (let i = 0; i < desired; i++) {
-                    if (!snowflakes[i]) {
-                        snowflakes[i] = makeFlake();
-                    }
-                }
-            };
-
-            const makeFlake = () => {
-                return {
-                    x: Math.random() * width,
-                    y: Math.random() * height,
-                    r: Math.random() * 2.2 + 0.8,
-                    vy: Math.random() * 1.2 + 0.4,
-                    swing: Math.random() * 0.6 + 0.2,
-                    phase: Math.random() * Math.PI * 2,
-                };
-            };
-
-            let tick = 0;
-            const draw = () => {
-                ctx.clearRect(0, 0, width, height);
-                ctx.fillStyle = '#0b1625';
-                ctx.fillRect(0, 0, width, height);
-
-                const wind = Math.sin(tick / 180) * 0.6;
-
-                for (let i = 0; i < snowflakes.length; i++) {
-                    const f = snowflakes[i];
-                    if (!f) continue;
-                    f.y += f.vy + Math.abs(wind) * 0.15;
-                    f.x += Math.sin(f.phase + tick / 90) * f.swing + wind;
-
-                    if (f.y > height) {
-                        f.y = -5;
-                        f.x = Math.random() * width;
-                    }
-                    if (f.x > width) {
-                        f.x = -5;
-                    } else if (f.x < -5) {
-                        f.x = width + 5;
-                    }
-
-                    ctx.beginPath();
-                    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-                    ctx.fill();
-                }
-
-                tick++;
-                if (loading) {
-                    loading.classList.add('hidden');
-                }
-                window.requestAnimationFrame(draw);
-            };
-
-            resize();
-            draw();
-            window.addEventListener('resize', resize);
-        })();
+        }, 1000);
     </script>
 </body>
 </html>

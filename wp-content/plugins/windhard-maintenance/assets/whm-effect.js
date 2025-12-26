@@ -1,5 +1,5 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-07-05-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-07-05-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-07-05-02');
+window.__WHM_EFFECT_VERSION = 'PR-2024-07-05-02';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
@@ -149,42 +149,80 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             return v;
         }
 
+        vec3 microNormal(vec2 pos, float t) {
+            // Normal-only ripples to break up specular into finer streaks
+            float dHx = 0.0;
+            float dHz = 0.0;
+
+            vec2 d1 = normalize(vec2(1.0, 0.35));
+            vec2 d2 = normalize(vec2(-0.65, 1.0));
+            vec2 d3 = normalize(vec2(0.2, -1.0));
+            vec2 d4 = normalize(vec2(-1.0, -0.25));
+
+            float f1 = 6.5; float s1 = 2.2; float a1 = 0.18;
+            float f2 = 9.5; float s2 = 2.7; float a2 = 0.14;
+            float f3 = 13.0; float s3 = 3.4; float a3 = 0.11;
+            float f4 = 17.0; float s4 = 4.1; float a4 = 0.09;
+
+            float ph1 = dot(d1, pos) * f1 + t * s1;
+            float ph2 = dot(d2, pos) * f2 + t * s2;
+            float ph3 = dot(d3, pos) * f3 + t * s3;
+            float ph4 = dot(d4, pos) * f4 + t * s4;
+
+            dHx += d1.x * cos(ph1) * a1 * f1;
+            dHz += d1.y * cos(ph1) * a1 * f1;
+            dHx += d2.x * cos(ph2) * a2 * f2;
+            dHz += d2.y * cos(ph2) * a2 * f2;
+            dHx += d3.x * cos(ph3) * a3 * f3;
+            dHz += d3.y * cos(ph3) * a3 * f3;
+            dHx += d4.x * cos(ph4) * a4 * f4;
+            dHz += d4.y * cos(ph4) * a4 * f4;
+
+            return normalize(vec3(-dHx, 1.0, -dHz));
+        }
+
         void main() {
             vec3 N = normalize(v_normal);
             vec3 V = normalize(u_camera - v_world);
             vec3 L = normalize(u_light);
             vec3 H = normalize(L + V);
 
-            float diff = max(dot(N, L), 0.0);
-            float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
+            vec3 microN = microNormal(v_world.xz * 0.45, u_time * 0.85);
+            N = normalize(mix(N, microN, 0.52));
 
-            vec3 waterDeep = vec3(0.02, 0.08, 0.14);
-            vec3 waterShallow = vec3(0.05, 0.17, 0.25);
-            float viewLift = clamp(0.3 + V.y * 0.6, 0.0, 1.0);
+            float diff = max(dot(N, L), 0.0);
+            float fresnelBase = 0.04;
+            float fresnel = fresnelBase + (1.0 - fresnelBase) * pow(1.0 - max(dot(N, V), 0.0), 5.0);
+
+            vec3 waterDeep = vec3(0.03, 0.09, 0.15);
+            vec3 waterShallow = vec3(0.07, 0.18, 0.26);
+            float viewLift = clamp(0.28 + V.y * 0.55, 0.0, 1.0);
             vec3 base = mix(waterDeep, waterShallow, viewLift);
 
-            vec3 skyTop = vec3(0.18, 0.34, 0.52);
-            vec3 skyHorizon = vec3(0.06, 0.12, 0.20);
-            float skyMix = clamp(0.45 + N.y * 0.6, 0.0, 1.0);
-            vec3 reflection = mix(skyHorizon, skyTop, skyMix);
+            vec3 skyTop = vec3(0.2, 0.34, 0.54);
+            vec3 skyHorizon = vec3(0.1, 0.16, 0.26);
+            vec3 R = reflect(-V, N);
+            float skyV = clamp(0.5 + R.y * 0.55, 0.0, 1.0);
+            vec3 reflection = mix(skyHorizon, skyTop, skyV);
 
-            vec3 color = mix(base, reflection, fresnel * 0.85 + 0.12);
-            float spec = pow(max(dot(N, H), 0.0), 90.0);
-            color += diff * vec3(0.12, 0.20, 0.28) + spec * vec3(0.9, 0.95, 1.0);
+            vec3 color = mix(base, reflection, fresnel);
+            float spec = pow(max(dot(N, H), 0.0), 120.0);
+            float rough = 0.5 + 0.5 * noise(v_world.xz * 0.8 + u_time * 0.3);
+            color += diff * vec3(0.12, 0.2, 0.3) + spec * mix(vec3(0.6, 0.7, 0.8), vec3(0.9, 0.95, 1.0), rough);
 
             float foamNoise = fbm(v_world.xz * 0.45 + u_time * vec2(0.4, 0.25) + u_angles * 3.5);
-            float foamLine = smoothstep(0.65, 0.95, v_foam + foamNoise * 0.35);
+            float foamLine = smoothstep(0.58, 0.92, v_foam + foamNoise * 0.4);
             vec3 foamColor = vec3(0.82, 0.9, 0.98);
             color = mix(color, foamColor, foamLine);
 
             float dist = length(u_camera - v_world);
-            float fog = smoothstep(12.0, 42.0, dist);
-            vec3 fogColor = vec3(0.04, 0.08, 0.12);
+            float fog = smoothstep(14.0, 46.0, dist);
+            vec3 fogColor = mix(vec3(0.05, 0.09, 0.14), skyHorizon, 0.35);
             color = mix(color, fogColor, fog);
 
             vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-            float vign = smoothstep(1.2, 0.35, length(uv - 0.5));
-            color *= vign;
+            float vign = smoothstep(1.25, 0.6, length(uv - 0.5));
+            color *= mix(0.92, 1.0, vign);
 
             float dither = (hash(gl_FragCoord.xy + u_time) - 0.5) / 255.0;
             color += dither;
@@ -246,22 +284,22 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
     const uniWaveB = gl.getUniformLocation(program, 'u_waveB[0]');
 
     const waveA = new Float32Array([
-        1.0, 0.3, 1.4, 1.05,
-        0.7, 0.25, 1.1, 0.95,
-        -0.6, 1.0, 0.8, 0.8,
-        0.2, 1.0, 0.55, 0.7,
-        1.0, -0.15, 0.42, 0.6,
-        -0.85, 0.4, 0.35, 0.55,
-        0.4, -1.0, 0.3, 0.5,
+        0.95, 0.25, 1.9, 0.9,
+        0.65, 0.15, 1.55, 0.8,
+        -0.45, 1.0, 1.05, 0.72,
+        0.18, 1.0, 0.72, 0.65,
+        1.0, -0.2, 0.52, 0.55,
+        -0.85, 0.45, 0.44, 0.5,
+        0.35, -1.0, 0.36, 0.48,
     ]);
     const waveB = new Float32Array([
-        18.0, 0.9, 0.0, 0.0,
-        13.0, 1.05, 1.3, 0.0,
-        8.0, 1.35, 2.6, 0.0,
-        5.2, 1.85, 3.9, 0.0,
-        3.6, 2.3, 4.9, 0.0,
-        2.8, 2.8, 5.7, 0.0,
-        2.2, 3.15, 6.8, 0.0,
+        26.0, 0.72, 0.0, 0.0,
+        18.0, 0.95, 1.1, 0.0,
+        11.5, 1.35, 2.3, 0.0,
+        8.0, 1.65, 3.4, 0.0,
+        5.8, 2.15, 4.6, 0.0,
+        4.2, 2.55, 5.6, 0.0,
+        3.3, 2.95, 6.6, 0.0,
     ]);
 
     function buildGrid(resolution, span) {
@@ -461,12 +499,12 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         pitch += Math.cos(time * 0.08) * drift * 0.25;
         pitch = Math.max(-0.25, Math.min(0.28, pitch));
 
-        const camDist = 5.2;
-        const camHeight = 1.35 + Math.sin(time * 0.15) * 0.08;
+        const camDist = 6.0;
+        const camHeight = 1.1 + Math.sin(time * 0.12) * 0.07;
         const cy = Math.cos(yaw); const sy = Math.sin(yaw);
         const cp = Math.cos(pitch); const sp = Math.sin(pitch);
         const eye = [Math.sin(yaw) * camDist * cp, camHeight + sp * 0.5, -Math.cos(yaw) * camDist * cp];
-        const target = [0, 0.25 + sp * 0.35, 0];
+        const target = [0, 0.18 + sp * 0.3, 0];
         const view = lookAt(eye, target, [0, 1, 0]);
         const proj = perspective((60 * Math.PI) / 180, canvas.width / canvas.height, 0.1, 60.0);
 

@@ -25,6 +25,7 @@ final class Wind_Warehouse_Portal {
         add_action('wp_ajax_ww_ship_validate_code', [self::class, 'ajax_ship_validate_code']);
         add_action('admin_post_ww_ship_confirm', [self::class, 'admin_post_ship_confirm']);
         add_action('admin_post_ww_ship_export', [self::class, 'admin_post_ship_export']);
+        add_action('admin_post_ww_reports_export', [self::class, 'admin_post_reports_export']);
     }
 
     public static function portal_url(): string {
@@ -90,6 +91,10 @@ final class Wind_Warehouse_Portal {
         $current_view = isset($_GET['wh']) ? sanitize_text_field(wp_unslash($_GET['wh'])) : '';
         $view_key = $current_view !== '' ? $current_view : 'dashboard';
 
+        if ($view_key === 'reports-monthly' || $view_key === 'reports-yearly') {
+            $view_key = 'reports';
+        }
+
         $nav_items = self::nav_items();
 
         if (!array_key_exists($view_key, $nav_items)) {
@@ -131,8 +136,7 @@ final class Wind_Warehouse_Portal {
             'ship'            => __('Ship Codes', 'wind-warehouse'),
             'reset-b'         => __('Reset B', 'wind-warehouse'),
             'monitor-hq'      => __('HQ Monitor', 'wind-warehouse'),
-            'reports-monthly' => __('Monthly Reports', 'wind-warehouse'),
-            'reports-yearly'  => __('Yearly Reports', 'wind-warehouse'),
+            'reports'         => __('Reports', 'wind-warehouse'),
         ];
     }
 
@@ -159,6 +163,7 @@ final class Wind_Warehouse_Portal {
             'ship'            => 'wh_ship_codes',
             'reset-b'         => ['wh_reset_consumer_count_internal', 'wh_reset_consumer_count_dealer'],
             'monitor-hq'      => ['wh_view_reports', 'manage_options'],
+            'reports'         => ['wh_view_reports', 'manage_options'],
             'reports-monthly' => 'wh_view_reports',
             'reports-yearly'  => 'wh_view_reports',
         ];
@@ -229,12 +234,8 @@ final class Wind_Warehouse_Portal {
             return self::render_monitor_hq_view();
         }
 
-        if ($view_key === 'reports-monthly') {
-            return self::render_reports_view('monthly');
-        }
-
-        if ($view_key === 'reports-yearly') {
-            return self::render_reports_view('yearly');
+        if ($view_key === 'reports') {
+            return self::render_reports_view($error_message);
         }
 
         return '<p>' . sprintf(
@@ -244,230 +245,430 @@ final class Wind_Warehouse_Portal {
         ) . '</p>';
     }
 
-    private static function render_reports_view(string $mode): string {
+
+    private static function render_reports_view(?string $error_message): string {
         if (!is_user_logged_in() || (!current_user_can('manage_options') && !current_user_can('wh_view_reports'))) {
             return '<p>' . esc_html__('Forbidden', 'wind-warehouse') . '</p>';
         }
 
         global $wpdb;
+
+        $filters = self::parse_reports_filters($_GET);
+        $query_result = self::query_reports($filters, true);
+        $rows = $query_result['rows'];
+        $total = $query_result['total'];
+
+        $dealers_table = $wpdb->prefix . 'wh_dealers';
+        $skus_table    = $wpdb->prefix . 'wh_skus';
+
+        $dealer_options = $wpdb->get_results(
+            "SELECT id, dealer_code, name FROM {$dealers_table} ORDER BY name ASC",
+            ARRAY_A
+        );
+
+        $sku_options = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, sku_code, name, color, size FROM {$skus_table} WHERE status = %s ORDER BY sku_code ASC",
+                'active'
+            ),
+            ARRAY_A
+        );
+
+        $current_page = max(1, (int) $filters['paged']);
+        $per_page     = (int) $filters['per_page'];
+        $total_pages  = (int) max(1, ceil($total / $per_page));
+
+        $html  = '<div class="ww-reports">';
+        $html .= '<h2>' . esc_html__('Reports', 'wind-warehouse') . '</h2>';
+
+        if ($error_message !== null) {
+            $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
+        }
+
+        $html .= '<form method="get" class="ww-report-filters" style="margin: 12px 0;">';
+        $html .= '<input type="hidden" name="wh" value="reports" />';
+
+        $html .= '<label>' . esc_html__('Range', 'wind-warehouse') . ' ';
+        $html .= '<select name="range">';
+        $ranges = [
+            '1m'     => __('Last 1 month', 'wind-warehouse'),
+            '3m'     => __('Last 3 months', 'wind-warehouse'),
+            '1y'     => __('Last 1 year', 'wind-warehouse'),
+            'custom' => __('Custom', 'wind-warehouse'),
+        ];
+        foreach ($ranges as $key => $label) {
+            $selected = $filters['range'] === $key ? ' selected' : '';
+            $html .= '<option value="' . esc_attr($key) . '"' . $selected . '>' . esc_html($label) . '</option>';
+        }
+        $html .= '</select></label> ';
+
+        $html .= '<label>' . esc_html__('Start date', 'wind-warehouse') . ' <input type="date" name="start_date" value="' . esc_attr($filters['start_date']) . '" /></label> ';
+        $html .= '<label>' . esc_html__('End date', 'wind-warehouse') . ' <input type="date" name="end_date" value="' . esc_attr($filters['end_date']) . '" /></label> ';
+
+        $html .= '<label>' . esc_html__('Dealers', 'wind-warehouse') . ' <select multiple name="dealer_ids[]">';
+        if (is_array($dealer_options)) {
+            foreach ($dealer_options as $dealer) {
+                $selected = in_array((int) $dealer['id'], $filters['dealer_ids'], true) ? ' selected' : '';
+                $label = trim((string) ($dealer['dealer_code'] ?? '') . ' ' . (string) ($dealer['name'] ?? ''));
+                $html .= '<option value="' . esc_attr((string) $dealer['id']) . '"' . $selected . '>' . esc_html($label) . '</option>';
+            }
+        }
+        $html .= '</select></label> ';
+
+        $html .= '<label>' . esc_html__('SKUs', 'wind-warehouse') . ' <select multiple name="sku_ids[]">';
+        if (is_array($sku_options)) {
+            foreach ($sku_options as $sku) {
+                $selected = in_array((int) $sku['id'], $filters['sku_ids'], true) ? ' selected' : '';
+                $label = trim((string) ($sku['sku_code'] ?? '') . ' ' . (string) ($sku['name'] ?? '') . ' ' . (string) ($sku['color'] ?? '') . ' ' . (string) ($sku['size'] ?? ''));
+                $html .= '<option value="' . esc_attr((string) $sku['id']) . '"' . $selected . '>' . esc_html($label) . '</option>';
+            }
+        }
+        $html .= '</select></label> ';
+
+        $html .= '<label>' . esc_html__('Sort', 'wind-warehouse') . ' <select name="sort">';
+        $sort_options = [
+            'qty_desc' => __('Quantity desc', 'wind-warehouse'),
+            'sku_asc'  => __('SKU asc', 'wind-warehouse'),
+        ];
+        foreach ($sort_options as $key => $label) {
+            $selected = $filters['sort'] === $key ? ' selected' : '';
+            $html .= '<option value="' . esc_attr($key) . '"' . $selected . '>' . esc_html($label) . '</option>';
+        }
+        $html .= '</select></label> ';
+
+        $html .= '<label>' . esc_html__('Per page', 'wind-warehouse') . ' <select name="per_page">';
+        foreach ([20, 50, 100] as $pp) {
+            $selected = (int) $filters['per_page'] === $pp ? ' selected' : '';
+            $html .= '<option value="' . esc_attr((string) $pp) . '"' . $selected . '>' . esc_html((string) $pp) . '</option>';
+        }
+        $html .= '</select></label> ';
+
+        $html .= '<button type="submit">' . esc_html__('Apply', 'wind-warehouse') . '</button>';
+        $html .= '</form>';
+
+        $html .= '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin: 12px 0;">';
+        $html .= '<input type="hidden" name="action" value="ww_reports_export" />';
+        $html .= '<input type="hidden" name="ww_nonce" value="' . esc_attr(wp_create_nonce('ww_reports_export')) . '" />';
+        $html .= self::render_report_hidden_fields($filters);
+        $html .= '<button type="submit">' . esc_html__('Export CSV', 'wind-warehouse') . '</button>';
+        $html .= '</form>';
+
+        $html .= '<p>' . esc_html__('Range', 'wind-warehouse') . ': ' . esc_html($filters['start_date']) . ' ~ ' . esc_html($filters['end_date']) . '</p>';
+        $html .= '<p>' . esc_html__('Total SKUs', 'wind-warehouse') . ': ' . esc_html((string) $total) . ' | ' . esc_html__('Page', 'wind-warehouse') . ' ' . esc_html((string) $current_page) . ' / ' . esc_html((string) $total_pages) . '</p>';
+
+        $html .= '<table class="ww-table"><thead><tr>';
+        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Quantity', 'wind-warehouse') . '</th>';
+        $html .= '</tr></thead><tbody>';
+
+        if (!empty($rows)) {
+            foreach ($rows as $row) {
+                $sku_label = trim((string) ($row['sku_code'] ?? '') . ' ' . (string) ($row['name'] ?? '') . ' ' . (string) ($row['color'] ?? '') . ' ' . (string) ($row['size'] ?? ''));
+                $html .= '<tr>';
+                $html .= '<td>' . esc_html($sku_label) . '</td>';
+                $html .= '<td>' . esc_html((string) ($row['qty'] ?? 0)) . '</td>';
+                $html .= '</tr>';
+            }
+        } else {
+            $html .= '<tr><td colspan="2">' . esc_html__('No records.', 'wind-warehouse') . '</td></tr>';
+        }
+        $html .= '</tbody></table>';
+
+        $html .= self::render_reports_pagination($filters, $total_pages);
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    private static function render_reports_pagination(array $filters, int $total_pages): string {
+        $current_page = max(1, (int) $filters['paged']);
+        $total_pages  = max(1, $total_pages);
+
+        if ($total_pages <= 1) {
+            return '';
+        }
+
+        $html = '<div class="ww-pagination" style="margin-top:12px;">';
+        $html .= '<form method="get" style="display:inline-block; margin-right:12px;">';
+        $html .= '<input type="hidden" name="wh" value="reports" />';
+        $html .= self::render_report_hidden_fields($filters, ['paged']);
+        $html .= '<label>' . esc_html__('Page', 'wind-warehouse') . ' <input type="number" min="1" max="' . esc_attr((string) $total_pages) . '" name="paged" value="' . esc_attr((string) $current_page) . '" /></label> ';
+        $html .= '<button type="submit">' . esc_html__('Go', 'wind-warehouse') . '</button>';
+        $html .= '</form>';
+
+        $html .= '<div style="display:inline-block;">';
+        $html .= '<span>' . esc_html__('Total pages', 'wind-warehouse') . ': ' . esc_html((string) $total_pages) . '</span> ';
+
+        $base_args = self::collect_persistent_report_args($filters);
+        $base_url  = add_query_arg($base_args, self::portal_url());
+
+        if ($current_page > 1) {
+            $prev_url = add_query_arg('paged', $current_page - 1, $base_url);
+            $html    .= '<a href="' . esc_url($prev_url) . '">' . esc_html__('Prev', 'wind-warehouse') . '</a> ';
+        }
+
+        if ($current_page < $total_pages) {
+            $next_url = add_query_arg('paged', $current_page + 1, $base_url);
+            $html    .= '<a href="' . esc_url($next_url) . '">' . esc_html__('Next', 'wind-warehouse') . '</a>';
+        }
+
+        $html .= '</div>';
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    private static function render_report_hidden_fields(array $filters, array $exclude_keys = []): string {
+        $fields = '';
+        $exclude_map = array_fill_keys($exclude_keys, true);
+
+        $simple_keys = ['range', 'start_date', 'end_date', 'per_page', 'sort'];
+        foreach ($simple_keys as $key) {
+            if (isset($exclude_map[$key])) {
+                continue;
+            }
+            $fields .= '<input type="hidden" name="' . esc_attr($key) . '" value="' . esc_attr((string) $filters[$key]) . '" />';
+        }
+
+        if (!isset($exclude_map['paged'])) {
+            $fields .= '<input type="hidden" name="paged" value="' . esc_attr((string) $filters['paged']) . '" />';
+        }
+
+        if (!isset($exclude_map['dealer_ids'])) {
+            foreach ($filters['dealer_ids'] as $dealer_id) {
+                $fields .= '<input type="hidden" name="dealer_ids[]" value="' . esc_attr((string) $dealer_id) . '" />';
+            }
+        }
+
+        if (!isset($exclude_map['sku_ids'])) {
+            foreach ($filters['sku_ids'] as $sku_id) {
+                $fields .= '<input type="hidden" name="sku_ids[]" value="' . esc_attr((string) $sku_id) . '" />';
+            }
+        }
+
+        return $fields;
+    }
+
+    private static function collect_persistent_report_args(array $filters): array {
+        $args = [
+            'wh'        => 'reports',
+            'range'     => $filters['range'],
+            'start_date'=> $filters['start_date'],
+            'end_date'  => $filters['end_date'],
+            'per_page'  => $filters['per_page'],
+            'sort'      => $filters['sort'],
+        ];
+
+        foreach ($filters['dealer_ids'] as $dealer_id) {
+            $args['dealer_ids[]'][] = $dealer_id;
+        }
+
+        foreach ($filters['sku_ids'] as $sku_id) {
+            $args['sku_ids[]'][] = $sku_id;
+        }
+
+        return $args;
+    }
+
+    private static function parse_reports_filters(array $source): array {
+        $range = isset($source['range']) ? sanitize_text_field(wp_unslash($source['range'])) : '1m';
+        if (!in_array($range, ['1m', '3m', '1y', 'custom'], true)) {
+            $range = '1m';
+        }
+
+        $per_page = isset($source['per_page']) ? absint($source['per_page']) : 50;
+        if (!in_array($per_page, [20, 50, 100], true)) {
+            $per_page = 50;
+        }
+
+        $paged = isset($source['paged']) ? absint($source['paged']) : 1;
+        if ($paged < 1) {
+            $paged = 1;
+        }
+
+        $sort = isset($source['sort']) ? sanitize_text_field(wp_unslash($source['sort'])) : 'qty_desc';
+        if (!in_array($sort, ['qty_desc', 'sku_asc'], true)) {
+            $sort = 'qty_desc';
+        }
+
+        $dealer_ids = isset($source['dealer_ids']) ? array_map('absint', (array) $source['dealer_ids']) : [];
+        $dealer_ids = array_values(array_filter($dealer_ids, static function ($id) { return $id > 0; }));
+
+        $sku_ids = isset($source['sku_ids']) ? array_map('absint', (array) $source['sku_ids']) : [];
+        $sku_ids = array_values(array_filter($sku_ids, static function ($id) { return $id > 0; }));
+
+        $start_date_input = isset($source['start_date']) ? sanitize_text_field(wp_unslash($source['start_date'])) : '';
+        $end_date_input   = isset($source['end_date']) ? sanitize_text_field(wp_unslash($source['end_date'])) : '';
+
+        [$start_date, $end_date] = self::resolve_report_dates($range, $start_date_input, $end_date_input);
+
+        $tz = wp_timezone();
+        $start_dt = date_create_from_format('Y-m-d H:i:s', $start_date . ' 00:00:00', $tz);
+        $end_dt   = date_create_from_format('Y-m-d H:i:s', $end_date . ' 00:00:00', $tz);
+        if ($end_dt instanceof DateTime) {
+            $end_dt->modify('+1 day');
+        }
+
+        $start_ts = $start_dt instanceof DateTime ? $start_dt->format('Y-m-d H:i:s') : $start_date . ' 00:00:00';
+        $end_ts   = $end_dt instanceof DateTime ? $end_dt->format('Y-m-d H:i:s') : $end_date . ' 00:00:00';
+
+        return [
+            'range'      => $range,
+            'start_date' => $start_date,
+            'end_date'   => $end_date,
+            'start_ts'   => $start_ts,
+            'end_ts'     => $end_ts,
+            'per_page'   => $per_page,
+            'paged'      => $paged,
+            'dealer_ids' => $dealer_ids,
+            'sku_ids'    => $sku_ids,
+            'sort'       => $sort,
+        ];
+    }
+
+    private static function resolve_report_dates(string $range, string $start_input, string $end_input): array {
+        $tz = wp_timezone();
+        $today = new DateTime('now', $tz);
+        $today->setTime(0, 0, 0);
+
+        $start_date = $today->format('Y-m-d');
+        $end_date   = $today->format('Y-m-d');
+
+        if ($range === 'custom') {
+            if (!self::is_valid_date($start_input)) {
+                $start_input = $start_date;
+            }
+            if (!self::is_valid_date($end_input)) {
+                $end_input = $end_date;
+            }
+
+            $start_dt = date_create_from_format('Y-m-d', $start_input, $tz) ?: clone $today;
+            $end_dt   = date_create_from_format('Y-m-d', $end_input, $tz) ?: clone $today;
+
+            if ($start_dt > $end_dt) {
+                [$start_dt, $end_dt] = [$end_dt, $start_dt];
+            }
+
+            $start_date = $start_dt->format('Y-m-d');
+            $end_date   = $end_dt->format('Y-m-d');
+        } else {
+            $start_dt = clone $today;
+            if ($range === '3m') {
+                $start_dt->modify('-3 months');
+            } elseif ($range === '1y') {
+                $start_dt->modify('-1 year');
+            } else {
+                $start_dt->modify('-1 month');
+            }
+            $start_date = $start_dt->format('Y-m-d');
+        }
+
+        return [$start_date, $end_date];
+    }
+
+    private static function is_valid_date(string $date): bool {
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1;
+    }
+
+    private static function query_reports(array $filters, bool $with_pagination): array {
+        global $wpdb;
+
         $shipments_table = $wpdb->prefix . 'wh_shipments';
         $items_table     = $wpdb->prefix . 'wh_shipment_items';
         $codes_table     = $wpdb->prefix . 'wh_codes';
         $skus_table      = $wpdb->prefix . 'wh_skus';
-        $dealers_table   = $wpdb->prefix . 'wh_dealers';
 
-        $export = isset($_GET['export']) && $_GET['export'] === '1';
-        $code_q = isset($_GET['code']) ? sanitize_text_field(wp_unslash($_GET['code'])) : '';
+        $where_parts = ['sh.created_at >= %s', 'sh.created_at < %s'];
+        $params = [$filters['start_ts'], $filters['end_ts']];
 
-        // 计算默认时间范围（使用站点时区）
-        $now_ts = current_time('timestamp');
-        $year = (int) gmdate('Y', $now_ts + (int) get_option('gmt_offset') * 3600);
-
-        $range_start = '';
-        $range_end   = '';
-        $label = '';
-
-        if ($mode === 'monthly') {
-            $month = isset($_GET['month']) ? sanitize_text_field(wp_unslash($_GET['month'])) : '';
-            if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
-                $month = gmdate('Y-m', $now_ts + (int) get_option('gmt_offset') * 3600);
-            }
-            $range_start = $month . '-01 00:00:00';
-            $start_dt = date_create_from_format('Y-m-d H:i:s', $range_start);
-            if ($start_dt) {
-                $end_dt = clone $start_dt;
-                $end_dt->modify('+1 month');
-                $range_end = $end_dt->format('Y-m-d H:i:s');
-            } else {
-                $range_end = $month . '-28 00:00:00';
-            }
-            $label = $month;
-        } else {
-            $y = isset($_GET['year']) ? absint($_GET['year']) : 0;
-            if ($y < 2000 || $y > 2100) {
-                $y = $year;
-            }
-            $range_start = sprintf('%04d-01-01 00:00:00', $y);
-            $range_end   = sprintf('%04d-01-01 00:00:00', $y + 1);
-            $label = (string) $y;
+        if (!empty($filters['dealer_ids'])) {
+            $placeholders = implode(',', array_fill(0, count($filters['dealer_ids']), '%d'));
+            $where_parts[] = 'sh.dealer_id IN (' . $placeholders . ')';
+            $params = array_merge($params, $filters['dealer_ids']);
         }
 
-        // CSV 导出：经销商×SKU 汇总
-        if ($export) {
-            header('Content-Type: text/csv; charset=utf-8');
-            header('Content-Disposition: attachment; filename=ww_reports_' . $mode . '_' . preg_replace('/[^0-9\-]/', '', $label) . '.csv');
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['dealer_code','dealer_name','sku_code','sku_name','qty','range_start','range_end']);
-
-            $where = "WHERE sh.created_at >= %s AND sh.created_at < %s";
-            $params = [$range_start, $range_end];
-            if ($code_q !== '') {
-                $where .= " AND c.code = %s";
-                $params[] = $code_q;
-            }
-
-            $rows = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT d.dealer_code, d.name AS dealer_name, s.sku_code, s.name AS sku_name, COUNT(*) AS qty " .
-                    "FROM {$items_table} si " .
-                    "INNER JOIN {$shipments_table} sh ON si.shipment_id = sh.id " .
-                    "INNER JOIN {$codes_table} c ON si.code_id = c.id " .
-                    "LEFT JOIN {$dealers_table} d ON sh.dealer_id = d.id " .
-                    "LEFT JOIN {$skus_table} s ON c.sku_id = s.id " .
-                    "{$where} " .
-                    "GROUP BY sh.dealer_id, c.sku_id " .
-                    "ORDER BY qty DESC",
-                    $params
-                ),
-                ARRAY_A
-            );
-
-            if (is_array($rows)) {
-                foreach ($rows as $r) {
-                    fputcsv($out, [
-                        $r['dealer_code'] ?? '',
-                        $r['dealer_name'] ?? '',
-                        $r['sku_code'] ?? '',
-                        $r['sku_name'] ?? '',
-                        $r['qty'] ?? 0,
-                        $range_start,
-                        $range_end,
-                    ]);
-                }
-            }
-            fclose($out);
-            exit;
+        if (!empty($filters['sku_ids'])) {
+            $placeholders = implode(',', array_fill(0, count($filters['sku_ids']), '%d'));
+            $where_parts[] = 'c.sku_id IN (' . $placeholders . ')';
+            $params = array_merge($params, $filters['sku_ids']);
         }
 
-        // 页面展示：经销商×SKU / 按经销商 / 按 SKU
-        $where = "WHERE sh.created_at >= %s AND sh.created_at < %s";
-        $params = [$range_start, $range_end];
-        if ($code_q !== '') {
-            $where .= " AND c.code = %s";
-            $params[] = $code_q;
+        $where_sql = 'WHERE ' . implode(' AND ', $where_parts);
+
+        $order_by = $filters['sort'] === 'sku_asc' ? 's.sku_code ASC' : 'qty DESC';
+
+        $count_query = "SELECT COUNT(DISTINCT c.sku_id) FROM {$items_table} si JOIN {$shipments_table} sh ON si.shipment_id = sh.id JOIN {$codes_table} c ON si.code_id = c.id {$where_sql}";
+        $total = (int) $wpdb->get_var($wpdb->prepare($count_query, $params));
+
+        $rows_query  = "SELECT c.sku_id, s.sku_code, s.name, s.color, s.size, COUNT(*) AS qty " .
+            "FROM {$items_table} si " .
+            "JOIN {$shipments_table} sh ON si.shipment_id = sh.id " .
+            "JOIN {$codes_table} c ON si.code_id = c.id " .
+            "LEFT JOIN {$skus_table} s ON c.sku_id = s.id " .
+            "{$where_sql} " .
+            "GROUP BY c.sku_id " .
+            "ORDER BY {$order_by}";
+
+        $row_params = $params;
+        if ($with_pagination) {
+            $offset = ((int) $filters['paged'] - 1) * (int) $filters['per_page'];
+            $rows_query .= ' LIMIT %d OFFSET %d';
+            $row_params[] = (int) $filters['per_page'];
+            $row_params[] = max(0, $offset);
         }
 
-        $rows_detail = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT sh.dealer_id, c.sku_id, d.dealer_code, d.name AS dealer_name, s.sku_code, s.name AS sku_name, COUNT(*) AS qty " .
-                "FROM {$items_table} si " .
-                "INNER JOIN {$shipments_table} sh ON si.shipment_id = sh.id " .
-                "INNER JOIN {$codes_table} c ON si.code_id = c.id " .
-                "LEFT JOIN {$dealers_table} d ON sh.dealer_id = d.id " .
-                "LEFT JOIN {$skus_table} s ON c.sku_id = s.id " .
-                "{$where} " .
-                "GROUP BY sh.dealer_id, c.sku_id " .
-                "ORDER BY qty DESC, d.dealer_code ASC",
-                $params
-            ),
+        $rows = $wpdb->get_results(
+            $wpdb->prepare($rows_query, $row_params),
             ARRAY_A
         );
 
-        $rows_by_dealer = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT sh.dealer_id, d.dealer_code, d.name AS dealer_name, COUNT(*) AS qty " .
-                "FROM {$items_table} si " .
-                "INNER JOIN {$shipments_table} sh ON si.shipment_id = sh.id " .
-                "INNER JOIN {$codes_table} c ON si.code_id = c.id " .
-                "LEFT JOIN {$dealers_table} d ON sh.dealer_id = d.id " .
-                "{$where} " .
-                "GROUP BY sh.dealer_id " .
-                "ORDER BY qty DESC, d.dealer_code ASC",
-                $params
-            ),
-            ARRAY_A
-        );
+        return [
+            'rows'  => is_array($rows) ? $rows : [],
+            'total' => $total,
+        ];
+    }
 
-        $rows_by_sku = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT c.sku_id, s.sku_code, s.name AS sku_name, COUNT(*) AS qty " .
-                "FROM {$items_table} si " .
-                "INNER JOIN {$shipments_table} sh ON si.shipment_id = sh.id " .
-                "INNER JOIN {$codes_table} c ON si.code_id = c.id " .
-                "LEFT JOIN {$skus_table} s ON c.sku_id = s.id " .
-                "{$where} " .
-                "GROUP BY c.sku_id " .
-                "ORDER BY qty DESC, s.sku_code ASC",
-                $params
-            ),
-            ARRAY_A
-        );
-
-        $html  = '<div class="ww-reports">';
-        $html .= '<h2>' . esc_html($mode === 'monthly' ? __('Monthly Reports', 'wind-warehouse') : __('Yearly Reports', 'wind-warehouse')) . '</h2>';
-        $html .= '<p>' . esc_html__('Range', 'wind-warehouse') . ': ' . esc_html($range_start) . ' ~ ' . esc_html($range_end) . '</p>';
-
-        // 筛选
-        $html .= '<form method="get" style="margin: 12px 0;">';
-        $html .= '<input type="hidden" name="wh" value="' . esc_attr($mode === 'monthly' ? 'reports-monthly' : 'reports-yearly') . '" />';
-        if ($mode === 'monthly') {
-            $month_val = isset($_GET['month']) ? sanitize_text_field(wp_unslash($_GET['month'])) : $label;
-            $html .= '<label>Month <input type="month" name="month" value="' . esc_attr($month_val) . '" /></label> ';
-        } else {
-            $year_val = isset($_GET['year']) ? absint($_GET['year']) : (int) $label;
-            $html .= '<label>Year <input type="number" min="2000" max="2100" name="year" value="' . esc_attr((string)$year_val) . '" /></label> ';
+    public static function admin_post_reports_export(): void {
+        if (!is_user_logged_in()) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
-        $html .= '<label>Code <input type="text" name="code" value="' . esc_attr($code_q) . '" /></label> ';
-        $html .= '<button type="submit">' . esc_html__('Apply', 'wind-warehouse') . '</button> ';
-        $html .= '<a class="button" href="' . esc_url(add_query_arg(array_merge($_GET, ['export'=>'1']), self::portal_url())) . '">' . esc_html__('Export CSV', 'wind-warehouse') . '</a>';
-        $html .= '</form>';
 
-        // 明细：经销商×SKU
-        $html .= '<h3>' . esc_html__('Dealer × SKU', 'wind-warehouse') . '</h3>';
-        $html .= '<table class="ww-table"><thead><tr>';
-        $html .= '<th>' . esc_html__('Dealer', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Quantity', 'wind-warehouse') . '</th>';
-        $html .= '</tr></thead><tbody>';
-        if (!empty($rows_detail)) {
-            foreach ($rows_detail as $r) {
-                $dealer = trim((string)($r['dealer_code'] ?? '') . ' ' . (string)($r['dealer_name'] ?? ''));
-                $sku    = trim((string)($r['sku_code'] ?? '') . ' ' . (string)($r['sku_name'] ?? ''));
-                $html .= '<tr>';
-                $html .= '<td>' . esc_html($dealer) . '</td>';
-                $html .= '<td>' . esc_html($sku) . '</td>';
-                $html .= '<td>' . esc_html((string)($r['qty'] ?? '0')) . '</td>';
-                $html .= '</tr>';
+        if (!current_user_can('wh_view_reports') && !current_user_can('manage_options')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_reports_export')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        $filters = self::parse_reports_filters($_POST);
+        $result  = self::query_reports($filters, false);
+        $rows    = $result['rows'];
+
+        $start = $filters['start_date'];
+        $end   = $filters['end_date'];
+        $filename = sprintf('ww-report-%s-%s.csv', preg_replace('/[^0-9]/', '', $start), preg_replace('/[^0-9]/', '', $end));
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['SKU Code', 'SKU Name', 'Color', 'Size', 'Qty']);
+
+        if (is_array($rows)) {
+            foreach ($rows as $row) {
+                fputcsv($out, [
+                    $row['sku_code'] ?? '',
+                    $row['name'] ?? '',
+                    $row['color'] ?? '',
+                    $row['size'] ?? '',
+                    $row['qty'] ?? 0,
+                ]);
             }
-        } else {
-            $html .= '<tr><td colspan="3">' . esc_html__('No records.', 'wind-warehouse') . '</td></tr>';
         }
-        $html .= '</tbody></table>';
 
-        // 按经销商
-        $html .= '<h3 style="margin-top:18px;">' . esc_html__('By dealer', 'wind-warehouse') . '</h3>';
-        $html .= '<table class="ww-table"><thead><tr>';
-        $html .= '<th>' . esc_html__('Dealer', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Quantity', 'wind-warehouse') . '</th>';
-        $html .= '</tr></thead><tbody>';
-        if (!empty($rows_by_dealer)) {
-            foreach ($rows_by_dealer as $r) {
-                $dealer = trim((string)($r['dealer_code'] ?? '') . ' ' . (string)($r['dealer_name'] ?? ''));
-                $html .= '<tr><td>' . esc_html($dealer) . '</td><td>' . esc_html((string)($r['qty'] ?? '0')) . '</td></tr>';
-            }
-        } else {
-            $html .= '<tr><td colspan="2">' . esc_html__('No records.', 'wind-warehouse') . '</td></tr>';
-        }
-        $html .= '</tbody></table>';
-
-        // 按 SKU
-        $html .= '<h3 style="margin-top:18px;">' . esc_html__('By SKU', 'wind-warehouse') . '</h3>';
-        $html .= '<table class="ww-table"><thead><tr>';
-        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Quantity', 'wind-warehouse') . '</th>';
-        $html .= '</tr></thead><tbody>';
-        if (!empty($rows_by_sku)) {
-            foreach ($rows_by_sku as $r) {
-                $sku = trim((string)($r['sku_code'] ?? '') . ' ' . (string)($r['sku_name'] ?? ''));
-                $html .= '<tr><td>' . esc_html($sku) . '</td><td>' . esc_html((string)($r['qty'] ?? '0')) . '</td></tr>';
-            }
-        } else {
-            $html .= '<tr><td colspan="2">' . esc_html__('No records.', 'wind-warehouse') . '</td></tr>';
-        }
-        $html .= '</tbody></table>';
-
-        $html .= '</div>';
-        return $html;
+        fclose($out);
+        exit;
     }
 
     private static function handle_skus_submission(WP_User $user): ?string {

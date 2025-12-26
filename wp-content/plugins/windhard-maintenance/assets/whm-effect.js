@@ -1,5 +1,5 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-06-01-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-06-01-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-06-04-01');
+window.__WHM_EFFECT_VERSION = 'PR-2024-06-04-01';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
@@ -86,55 +86,58 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             return v;
         }
 
-        struct Wave {
-            vec2 dir;
-            float amp;
-            float freq;
-            float speed;
-        };
-
-        Wave wave(vec2 dir, float amp, float wl, float speed) {
-            Wave w;
-            w.dir = normalize(dir);
-            w.amp = amp;
-            w.freq = 6.28318 / wl;
-            w.speed = speed;
-            return w;
+        // Wave packed as vec4: dir.x, dir.y, amplitude, frequency; speed provided separately.
+        vec4 makeWave(vec2 dir, float amp, float wl) {
+            vec2 d = normalize(dir);
+            return vec4(d, amp, 6.28318 / wl);
         }
 
-        vec3 waveNormal(vec2 p, float t, Wave w) {
-            float phase = dot(w.dir, p) * w.freq + t * w.speed;
+        float wavePhase(vec2 p, float t, vec4 w, float speed) {
+            return dot(w.xy, p) * w.w + t * speed;
+        }
+
+        float waveHeight(vec2 p, float t, vec4 w, float speed, float ampScale) {
+            float phase = wavePhase(p, t, w, speed);
+            return w.z * ampScale * sin(phase);
+        }
+
+        vec3 waveNormal(vec2 p, float t, vec4 w, float speed, float ampScale) {
+            float phase = wavePhase(p, t, w, speed);
             float s = sin(phase);
             float c = cos(phase);
-            float dx = -w.dir.x * w.amp * w.freq * c;
-            float dz = -w.dir.y * w.amp * w.freq * c;
-            vec3 n = normalize(vec3(dx, 1.0 - s * w.amp * w.freq, dz));
+            float amp = w.z * ampScale;
+            float dx = -w.x * amp * w.w * c;
+            float dz = -w.y * amp * w.w * c;
+            vec3 n = normalize(vec3(dx, 1.0 - s * amp * w.w, dz));
             return n;
         }
 
-        float waveHeight(vec2 p, float t, Wave w) {
-            float phase = dot(w.dir, p) * w.freq + t * w.speed;
-            return w.amp * sin(phase);
-        }
-
         vec3 oceanNormalHeight(vec2 pos, float t, out float h) {
-            Wave w1 = wave(vec2(1.0, 0.3), 0.8, 6.5, 1.2);
-            Wave w2 = wave(vec2(-0.4, 1.0), 0.45, 3.5, 1.8);
-            Wave w3 = wave(vec2(0.2, 1.0), 0.25, 1.6, 2.4);
-            Wave hero = wave(vec2(1.0, 0.1), 1.6, 12.0, 0.9);
+            vec4 w1 = makeWave(vec2(1.0, 0.3), 0.8, 6.5);
+            vec4 w2 = makeWave(vec2(-0.4, 1.0), 0.45, 3.5);
+            vec4 w3 = makeWave(vec2(0.2, 1.0), 0.25, 1.6);
+            vec4 hero = makeWave(vec2(1.0, 0.1), 1.6, 12.0);
+
+            float s1 = 1.2;
+            float s2 = 1.8;
+            float s3 = 2.4;
+            float heroSpeed = 0.9;
 
             float heroBlend = smoothstep(0.0, 1.2, fbm(pos * 0.05 + t * 0.08));
 
-            h = 0.0;
-            h += waveHeight(pos, t, w1) * mix(1.0, 1.25, heroBlend);
-            h += waveHeight(pos, t, w2);
-            h += waveHeight(pos, t, w3 * 0.8);
-            h += waveHeight(pos * 0.7, t * 0.8, hero) * 1.4;
+            float w1Scale = mix(1.0, 1.25, heroBlend);
+            float w3Scale = 0.8;
 
-            vec3 n = waveNormal(pos, t, w1);
-            n += waveNormal(pos, t, w2) * 0.7;
-            n += waveNormal(pos, t, w3) * 0.6;
-            n += waveNormal(pos * 0.7, t * 0.8, hero) * 1.3;
+            h = 0.0;
+            h += waveHeight(pos, t, w1, s1, w1Scale);
+            h += waveHeight(pos, t, w2, s2, 1.0);
+            h += waveHeight(pos, t, w3, s3, w3Scale);
+            h += waveHeight(pos * 0.7, t * 0.8, hero, heroSpeed, 1.4);
+
+            vec3 n = waveNormal(pos, t, w1, s1, w1Scale);
+            n += waveNormal(pos, t, w2, s2, 1.0) * 0.7;
+            n += waveNormal(pos, t, w3, s3, w3Scale) * 0.6;
+            n += waveNormal(pos * 0.7, t * 0.8, hero, heroSpeed, 1.3);
             return normalize(n);
         }
 
@@ -216,7 +219,10 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(shader));
+            const log = gl.getShaderInfoLog(shader) || 'Unknown shader compile error';
+            const lines = source.split('\n').slice(0, 120).map((line, idx) => `${idx + 1}: ${line}`);
+            console.error('Shader compile failed:', log);
+            console.error('Shader source (first 120 lines):\n' + lines.join('\n'));
             gl.deleteShader(shader);
             return null;
         }
@@ -243,7 +249,7 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
     const program = createProgram(vertexSrc, fragmentSrc);
     if (!program) {
-        showError('EFFECT INIT FAILED');
+        showError('EFFECT INIT FAILED (SHADER COMPILE)');
         return;
     }
 

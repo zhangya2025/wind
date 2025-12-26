@@ -13,13 +13,13 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         watermark.textContent = 'EFFECT_EXPECTED: ' + window.__WHM_EFFECT_VERSION;
     }
 
-    function showError(message) {
+    function showError(message, detail) {
         if (errorNode) {
-            errorNode.textContent = message;
+            errorNode.textContent = detail ? `${message} — ${detail}` : message;
             errorNode.classList.remove('hidden');
         }
         if (loading) {
-            loading.textContent = message;
+            loading.textContent = detail ? `${message} — ${detail}` : message;
             loading.classList.remove('hidden');
         }
         if (canvas) {
@@ -65,14 +65,23 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
     resize();
     window.addEventListener('resize', resize);
 
+    function formatSource(source, maxLines = 120) {
+        const lines = source.split('\n');
+        return lines.slice(0, maxLines).map((line, idx) => `${idx + 1}: ${line}`).join('\n');
+    }
+
     function compileShader(type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            const log = gl.getShaderInfoLog(shader) || 'unknown error';
-            const numbered = source.split('\n').map((line, idx) => `${idx + 1}: ${line}`).join('\n');
-            console.error('Shader compile error:', log, '\nSource:\n', numbered);
+            const info = gl.getShaderInfoLog(shader) || '(no info)';
+            const numbered = formatSource(source, 120);
+            const typeLabel = type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT';
+            console.error('[WHM] SHADER_COMPILE_FAILED', { type: typeLabel, info });
+            console.error('[WHM] SHADER_SOURCE_WITH_LINENO\n' + numbered);
+            window.__WHM_SHADER_FAIL = { type: typeLabel, info, source: numbered };
+            showError('EFFECT INIT FAILED', 'SHADER_COMPILE_FAILED: ' + info.split('\n')[0]);
             gl.deleteShader(shader);
             throw new Error('SHADER COMPILE FAILED');
         }
@@ -87,8 +96,10 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         gl.attachShader(program, fs);
         gl.linkProgram(program);
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            const log = gl.getProgramInfoLog(program) || 'unknown error';
-            console.error('Program link error:', log);
+            const info = gl.getProgramInfoLog(program) || '(no info)';
+            console.error('[WHM] PROGRAM_LINK_FAILED', { info });
+            window.__WHM_SHADER_FAIL = { type: 'PROGRAM', info };
+            showError('EFFECT INIT FAILED', 'PROGRAM_LINK_FAILED: ' + info.split('\n')[0]);
             gl.deleteProgram(program);
             throw new Error('PROGRAM LINK FAILED');
         }

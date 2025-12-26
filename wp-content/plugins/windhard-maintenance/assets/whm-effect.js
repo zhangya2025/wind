@@ -1,5 +1,5 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-06-04-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-06-04-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-06-20-01');
+window.__WHM_EFFECT_VERSION = 'PR-2024-06-20-01';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
@@ -86,7 +86,7 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             return v;
         }
 
-        // Wave packed as vec4: dir.x, dir.y, amplitude, frequency; speed provided separately.
+        // Wave packed as vec4: dir.x, dir.y, amplitude, angular frequency.
         vec4 makeWave(vec2 dir, float amp, float wl) {
             vec2 d = normalize(dir);
             return vec4(d, amp, 6.28318 / wl);
@@ -96,49 +96,43 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             return dot(w.xy, p) * w.w + t * speed;
         }
 
-        float waveHeight(vec2 p, float t, vec4 w, float speed, float ampScale) {
-            float phase = wavePhase(p, t, w, speed);
-            return w.z * ampScale * sin(phase);
-        }
-
-        vec3 waveNormal(vec2 p, float t, vec4 w, float speed, float ampScale) {
-            float phase = wavePhase(p, t, w, speed);
-            float s = sin(phase);
-            float c = cos(phase);
-            float amp = w.z * ampScale;
-            float dx = -w.x * amp * w.w * c;
-            float dz = -w.y * amp * w.w * c;
-            vec3 n = normalize(vec3(dx, 1.0 - s * amp * w.w, dz));
-            return n;
-        }
-
         vec3 oceanNormalHeight(vec2 pos, float t, out float h) {
-            vec4 w1 = makeWave(vec2(1.0, 0.3), 0.8, 6.5);
-            vec4 w2 = makeWave(vec2(-0.4, 1.0), 0.45, 3.5);
-            vec4 w3 = makeWave(vec2(0.2, 1.0), 0.25, 1.6);
-            vec4 hero = makeWave(vec2(1.0, 0.1), 1.6, 12.0);
+            vec4 waves[7];
+            float speeds[7];
+            float scales[7];
 
-            float s1 = 1.2;
-            float s2 = 1.8;
-            float s3 = 2.4;
-            float heroSpeed = 0.9;
+            waves[0] = makeWave(vec2(1.0, 0.2), 1.8, 16.0); speeds[0] = 0.9; scales[0] = 1.0;   // hero swell
+            waves[1] = makeWave(vec2(0.9, 0.35), 1.2, 11.0); speeds[1] = 1.05; scales[1] = 0.85; // second hero
+            waves[2] = makeWave(vec2(-0.45, 1.0), 0.65, 6.5); speeds[2] = 1.4; scales[2] = 0.9;
+            waves[3] = makeWave(vec2(0.2, 1.0), 0.45, 4.0);  speeds[3] = 1.75; scales[3] = 0.75;
+            waves[4] = makeWave(vec2(1.0, -0.15), 0.35, 3.2); speeds[4] = 2.1; scales[4] = 0.7;
+            waves[5] = makeWave(vec2(-0.8, 0.6), 0.28, 2.4); speeds[5] = 2.5; scales[5] = 0.65;
+            waves[6] = makeWave(vec2(0.35, -1.0), 0.2, 1.8); speeds[6] = 2.9; scales[6] = 0.55;
 
-            float heroBlend = smoothstep(0.0, 1.2, fbm(pos * 0.05 + t * 0.08));
-
-            float w1Scale = mix(1.0, 1.25, heroBlend);
-            float w3Scale = 0.8;
+            // gentle gusts to modulate large waves
+            float gust = fbm(pos * 0.08 + vec2(t * 0.15, t * 0.07));
+            float heroTilt = mix(0.9, 1.25, smoothstep(0.35, 0.75, gust));
+            scales[0] *= heroTilt;
+            scales[1] *= mix(0.95, 1.15, gust);
 
             h = 0.0;
-            h += waveHeight(pos, t, w1, s1, w1Scale);
-            h += waveHeight(pos, t, w2, s2, 1.0);
-            h += waveHeight(pos, t, w3, s3, w3Scale);
-            h += waveHeight(pos * 0.7, t * 0.8, hero, heroSpeed, 1.4);
+            vec3 grad = vec3(0.0);
+            for (int i = 0; i < 7; i++) {
+                vec4 w = waves[i];
+                float speed = speeds[i];
+                float scale = scales[i];
+                float phase = wavePhase(pos, t, w, speed);
+                float s = sin(phase);
+                float c = cos(phase);
+                float amp = w.z * scale;
+                h += amp * s;
+                grad.x += -w.x * amp * w.w * c;
+                grad.z += -w.y * amp * w.w * c;
+            }
 
-            vec3 n = waveNormal(pos, t, w1, s1, w1Scale);
-            n += waveNormal(pos, t, w2, s2, 1.0) * 0.7;
-            n += waveNormal(pos, t, w3, s3, w3Scale) * 0.6;
-            n += waveNormal(pos * 0.7, t * 0.8, hero, heroSpeed, 1.3);
-            return normalize(n);
+            float tilt = clamp(1.0 - 0.32 * length(grad.xz), 0.35, 1.0);
+            vec3 normal = normalize(vec3(grad.x, tilt, grad.z));
+            return normal;
         }
 
         vec3 applyFoam(vec3 color, float foam) {
@@ -154,8 +148,8 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             float yaw = mix(-0.35, 0.35, u_pointer.x);
             float pitch = mix(-0.08, 0.15, u_pointer.y);
 
-            vec3 camPos = vec3(0.0, 1.6, -5.0);
-            vec3 target = vec3(0.0, 0.4, 0.0);
+            vec3 camPos = vec3(0.0, 1.35, -4.6);
+            vec3 target = vec3(0.0, 0.35, 0.0);
             float cy = cos(yaw); float sy = sin(yaw);
             float cp = cos(pitch); float sp = sin(pitch);
             vec3 forward = normalize(vec3(sy*cp, sp, cy*cp));
@@ -175,28 +169,32 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             pos.y = h;
 
             // Re-evaluate normal with small offsets for better shading
-            float eps = 0.1;
+            float eps = 0.08;
             float hX; float hZ;
             vec3 nX = oceanNormalHeight(pos.xz + vec2(eps, 0.0), t, hX);
             vec3 nZ = oceanNormalHeight(pos.xz + vec2(0.0, eps), t, hZ);
-            vec3 normal = normalize(cross(vec3(eps, hX - h, 0.0), vec3(0.0, hZ - h, eps)) + n);
+            vec3 normal = normalize(cross(vec3(eps, hX - h, 0.0), vec3(0.0, hZ - h, eps)) + n * 0.6);
 
-            vec3 lightDir = normalize(vec3(-0.6, 0.8, -0.4));
+            vec3 lightDir = normalize(vec3(-0.55, 0.82, -0.35));
             float diff = max(dot(normal, lightDir), 0.0);
 
-            vec3 skyTop = vec3(0.12, 0.25, 0.42);
-            vec3 skyHorizon = vec3(0.04, 0.1, 0.18);
-            float skyMix = clamp(0.5 + normal.y * 0.5, 0.0, 1.0);
+            vec3 skyTop = vec3(0.14, 0.28, 0.46);
+            vec3 skyHorizon = vec3(0.05, 0.11, 0.2);
+            float skyMix = clamp(0.45 + normal.y * 0.6, 0.0, 1.0);
             vec3 skyColor = mix(skyHorizon, skyTop, skyMix);
 
             float fresnel = pow(1.0 - max(dot(normal, -rd), 0.0), 5.0);
-            vec3 baseWater = vec3(0.03, 0.1, 0.18);
+            vec3 baseWater = vec3(0.02, 0.09, 0.16);
             vec3 reflection = skyColor;
-            vec3 color = mix(baseWater, reflection, fresnel * 0.8 + 0.1);
-            color += diff * vec3(0.2, 0.35, 0.45);
+            vec3 color = mix(baseWater, reflection, fresnel * 0.85 + 0.12);
 
-            float foamSeed = fbm(pos.xz * 0.4 + vec2(t * 0.5, t * 0.3));
-            float foam = foamSeed + smoothstep(0.55, 0.9, abs(normal.y - 0.3));
+            vec3 halfDir = normalize(lightDir - rd);
+            float spec = pow(max(dot(normal, halfDir), 0.0), 70.0) * 1.2;
+            color += diff * vec3(0.22, 0.36, 0.46) + spec * vec3(0.9, 0.95, 1.0);
+
+            float slopeFoam = smoothstep(0.5, 1.1, length(vec2(nX.y - h, nZ.y - h)));
+            float foamSeed = fbm(pos.xz * 0.35 + vec2(t * 0.45, t * 0.3));
+            float foam = max(foamSeed, slopeFoam);
             color = applyFoam(color, foam);
 
             float dist = length(pos - camPos);

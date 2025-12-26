@@ -47,6 +47,10 @@
         uniform vec2 u_resolution;
         uniform float u_time;
         uniform float u_seed;
+        uniform vec2 u_view; // yaw (x), pitch (y)
+        uniform float u_quality;
+
+        const float PI = 3.14159265359;
 
         float hash(vec2 p) {
             p = fract(p * 0.3183099 + u_seed);
@@ -70,109 +74,158 @@
             float w = 0.5;
             for (int i = 0; i < 5; i++) {
                 f += w * noise(p);
-                p *= 2.12;
-                w *= 0.55;
+                p *= 2.07;
+                w *= 0.5;
             }
             return f;
         }
 
-        float gustPulse(float t) {
-            float n = fbm(vec2(t * 0.08, t * 0.05));
-            return smoothstep(0.35, 0.75, n);
+        mat2 rot(float a) {
+            float s = sin(a); float c = cos(a);
+            return mat2(c, -s, s, c);
         }
 
-        vec2 windField(vec2 uv, float t) {
-            float baseAngle = 1.05;
-            float baseMag = 0.85;
-            float gust = gustPulse(t) * 0.9;
-            float angle = baseAngle + noise(vec2(t * 0.06, uv.y * 0.7)) * 1.0;
-            float mag = baseMag + gust + noise(vec2(t * 0.12, uv.x * 0.6)) * 0.35;
-            return vec2(cos(angle), sin(angle)) * mag;
+        float gust(float t) {
+            float n = fbm(vec2(t * 0.06, t * 0.04));
+            return smoothstep(0.35, 0.8, n);
         }
 
-        float vignette(vec2 p) {
-            float v = smoothstep(1.2, 0.35, length(p - 0.5));
-            return v;
+        struct WaveSample {
+            float height;
+            vec3 grad;
+            float foam;
+        };
+
+        WaveSample gerstner(vec2 dir, float amp, float wl, float steep, float speed, vec2 p) {
+            float k = 2.0 * PI / wl;
+            float phase = dot(dir, p) * k + u_time * speed;
+            float s = sin(phase);
+            float c = cos(phase);
+            float disp = amp * s;
+            float df = amp * steep * k * c;
+            vec3 g = vec3(dir.x * df, 0.0, dir.y * df);
+            float crest = smoothstep(0.65, 1.05, abs(df));
+            return WaveSample(disp, g, crest * max(0.0, s));
         }
 
-        float snowSdf(vec2 p, float aspect) {
-            p.x *= aspect;
-            vec2 ap = abs(p);
-            float r = max(ap.x * 0.8 + ap.y * 0.5, length(p) * 0.65);
-            return smoothstep(0.18, 0.0, r);
+        WaveSample sampleWaves(vec2 pos) {
+            vec3 grad = vec3(0.0);
+            float h = 0.0;
+            float foam = 0.0;
+
+            float swellPulse = 0.7 + gust(u_time) * 0.9;
+            vec2 heroDir = normalize(vec2(0.9, 0.35));
+            WaveSample hero = gerstner(heroDir, 1.2 * swellPulse, 8.5, 1.05, 1.25, pos);
+            h += hero.height; grad += hero.grad; foam += hero.foam;
+
+            vec2 hero2Dir = normalize(vec2(0.7, 0.55));
+            WaveSample hero2 = gerstner(hero2Dir, 0.7 * swellPulse, 11.0, 0.75, 0.95, pos * 0.92 + vec2(0.5, -0.2));
+            h += hero2.height; grad += hero2.grad; foam += hero2.foam * 0.6;
+
+            WaveSample mid1 = gerstner(normalize(vec2(1.0, 0.05)), 0.35, 4.6, 0.9, 1.7, pos * 1.3);
+            h += mid1.height; grad += mid1.grad; foam += mid1.foam * 0.5;
+
+            WaveSample mid2 = gerstner(normalize(vec2(0.2, 1.0)), 0.28, 5.5, 0.8, 1.45, pos * 1.15 + 1.3);
+            h += mid2.height; grad += mid2.grad; foam += mid2.foam * 0.4;
+
+            WaveSample chop = gerstner(normalize(vec2(1.0, 0.6)), 0.08, 1.6, 0.9, 3.2, pos * 2.4 + vec2(0.1, 0.8));
+            h += chop.height; grad += chop.grad;
+
+            return WaveSample(h, grad, foam);
         }
 
-        float streakedSnow(vec2 uv, vec2 wind, float scale, float speed, float size, int streakSamples) {
-            vec2 dir = normalize(wind + vec2(0.001, 0.0));
-            float stepLen = 0.02 * length(wind) * max(1.0, size);
-            float accum = 0.0;
-            for (int i = 0; i < 5; i++) {
-                if (i >= streakSamples) break;
-                float w = exp(-float(i) * 0.55);
-                vec2 jitter = vec2(hash(uv * scale + float(i)), hash(uv * scale + float(i) + 1.3)) - 0.5;
-                vec2 offset = dir * stepLen * float(i) + jitter * 0.05;
-                vec2 cell = uv * scale + dir * speed * u_time + offset;
-                vec2 gv = fract(cell) - 0.5;
-                vec2 id = floor(cell);
-                float aspect = mix(0.7, 1.5, hash(id + 2.3));
-                vec2 p = gv + (hash(id + 0.7) - 0.5) * 0.6;
-                float shape = snowSdf(p / size, aspect);
-                accum += w * shape;
+        float heightAt(vec2 pos, out vec3 normal, out float foamMask) {
+            WaveSample w = sampleWaves(pos);
+            normal = normalize(vec3(-w.grad.x, 1.0, -w.grad.z));
+            float slope = length(vec2(w.grad.x, w.grad.z));
+            float noiseFoam = smoothstep(0.45, 0.9, fbm(pos * 0.5 + u_time * 0.4));
+            foamMask = clamp(w.foam * 0.9 + slope * 0.12 + noiseFoam * 0.35, 0.0, 1.0);
+            return w.height;
+        }
+
+        vec3 skyColor(vec3 rd) {
+            float h = max(rd.y, 0.0);
+            vec3 horizon = vec3(0.08, 0.14, 0.2);
+            vec3 zenith = vec3(0.03, 0.07, 0.12);
+            vec3 sky = mix(horizon, zenith, smoothstep(0.0, 0.8, h));
+            vec3 sunDir = normalize(vec3(0.6, 0.72, 0.25));
+            float sun = pow(max(dot(rd, sunDir), 0.0), 64.0);
+            return sky + sun * vec3(0.9, 0.85, 0.75) * 0.8;
+        }
+
+        vec3 renderOcean(vec3 ro, vec3 rd) {
+            if (rd.y >= -0.02) {
+                vec3 sk = skyColor(rd);
+                return sk;
             }
-            return accum;
-        }
 
-        float fogLayer(vec2 p, vec2 wind) {
-            vec2 fogUV = p * vec2(1.2, 1.5) + wind * (u_time * 0.03);
-            float f = fbm(fogUV * 1.25);
-            float depth = smoothstep(0.0, 1.0, 1.0 - p.y * 0.85);
-            return smoothstep(0.25, 0.9, f) * depth;
-        }
-
-        float snowLayer(vec2 p, vec2 wind, float scale, float speed, float size, int streaks) {
-            vec2 dir = normalize(wind + vec2(0.001, 0.0));
-            vec2 cell = p * scale + dir * speed * u_time;
-            vec2 gv = fract(cell) - 0.5;
-            vec2 id = floor(cell);
-            float jitter = hash(id + 1.5) - 0.5;
-            gv += vec2(jitter, hash(id + 3.7) - 0.5) * 0.35;
-            float aspect = mix(0.85, 1.35, hash(id + 2.9));
-            float base = snowSdf(gv / size, aspect);
-            if (streaks <= 1) {
-                return base;
+            float t = max(0.0, (0.0 - ro.y) / rd.y);
+            float h; vec3 n; float foam;
+            for (int i = 0; i < 7; i++) {
+                vec3 pos = ro + rd * t;
+                h = heightAt(pos.xz, n, foam);
+                float diff = (pos.y - h);
+                t -= diff / rd.y;
             }
-            float streak = streakedSnow(p, wind, scale, speed, size, streaks);
-            return max(base, streak);
+
+            vec3 pos = ro + rd * t;
+            h = heightAt(pos.xz, n, foam);
+
+            float distFog = 1.0 - exp(-t * 0.16);
+            vec3 fogColor = vec3(0.28, 0.4, 0.55);
+
+            vec3 sunDir = normalize(vec3(0.6, 0.72, 0.25));
+            float fresnel = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0) * 0.65 + 0.08;
+            vec3 refl = skyColor(reflect(rd, n));
+            vec3 deep = vec3(0.01, 0.04, 0.08);
+            vec3 shallow = vec3(0.05, 0.12, 0.18);
+            float depthTone = clamp(1.0 - (h + 1.5) * 0.35, 0.0, 1.0);
+            vec3 base = mix(shallow, deep, depthTone);
+
+            float spec = pow(max(dot(reflect(rd, n), sunDir), 0.0), 140.0) * 1.4;
+            float foamDetail = smoothstep(0.55, 1.05, foam) * 0.9;
+            float foamJitter = smoothstep(0.4, 0.95, noise(pos.xz * 2.8 + u_time * 0.6));
+            float whitecap = clamp(foamDetail + foamJitter * 0.7, 0.0, 1.0);
+            vec3 foamColor = mix(vec3(0.86, 0.9, 0.95), vec3(1.0), 0.4);
+
+            vec3 color = base;
+            color = mix(color, refl, fresnel);
+            color += spec * vec3(1.0, 0.95, 0.85);
+            color = mix(color, foamColor, whitecap * 0.9);
+
+            color = mix(color, fogColor, distFog * 0.55);
+            return color;
         }
 
         void main() {
-            vec2 p = v_uv;
-            p.y = 1.0 - p.y;
+            vec2 uv = v_uv;
+            vec2 p = (uv - 0.5) * 2.0;
+            p.x *= u_resolution.x / u_resolution.y;
 
-            vec2 wind = windField(p, u_time);
+            vec2 jitter = vec2(hash(gl_FragCoord.xy + 1.3) - 0.5, hash(gl_FragCoord.xy + 5.7) - 0.5) / u_quality;
+            p += jitter;
 
-            vec3 bgTop = vec3(0.035, 0.055, 0.085);
-            vec3 bgBot = vec3(0.06, 0.09, 0.13);
-            vec3 bg = mix(bgTop, bgBot, p.y);
+            float yaw = u_view.x;
+            float pitch = u_view.y;
+            vec3 forward = normalize(vec3(cos(pitch) * sin(yaw), sin(pitch), cos(pitch) * cos(yaw)));
+            vec3 right = normalize(vec3(cos(yaw), 0.0, -sin(yaw)));
+            vec3 up = normalize(cross(right, forward));
 
-            float fog = fogLayer(p, wind);
-            vec3 fogColor = vec3(0.8, 0.86, 0.93);
+            float fov = 1.2;
+            vec3 rd = normalize(forward + p.x * right * fov + p.y * up * fov);
 
-            float far = fog * 0.65;
-            float mid = snowLayer(p * 1.2, wind * 0.9, 18.0, 0.65, 0.55, 2);
-            float near = snowLayer(p * 1.7, wind * 1.3, 24.0, 1.05, 0.8, 5);
+            vec3 ro = vec3(0.0, 1.4, -3.0);
+            ro += forward * 0.2;
 
-            float snowAlpha = clamp(far * 0.8 + mid * 0.9 + near * 1.3, 0.0, 1.6);
-            vec3 snowColor = vec3(0.92, 0.97, 1.0);
+            vec3 col = renderOcean(ro, rd);
 
-            vec3 color = mix(bg, fogColor, fog * 0.6);
-            color = mix(color, snowColor, snowAlpha);
-            color *= vignette(p);
+            float vig = smoothstep(0.95, 0.4, length(uv - 0.5));
+            col *= vig;
 
             float dither = (hash(gl_FragCoord.xy / u_resolution.xy + u_seed) - 0.5) / 255.0;
-            color += dither;
+            col += dither;
 
-            gl_FragColor = vec4(color, 1.0);
+            gl_FragColor = vec4(pow(col, vec3(0.95)), 1.0);
         }
     `;
 
@@ -221,6 +274,8 @@
     const timeLoc = gl.getUniformLocation(program, 'u_time');
     const resolutionLoc = gl.getUniformLocation(program, 'u_resolution');
     const seedLoc = gl.getUniformLocation(program, 'u_seed');
+    const viewLoc = gl.getUniformLocation(program, 'u_view');
+    const qualityLoc = gl.getUniformLocation(program, 'u_quality');
 
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -240,6 +295,20 @@
     let width = 0;
     let height = 0;
     const seed = Math.random() * 100.0;
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '');
+    const baseQuality = isMobile ? 128.0 : 256.0;
+
+    let yaw = 0.0;
+    let pitch = -0.25;
+    let targetYaw = yaw;
+    let targetPitch = pitch;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function clampPitch(v) {
+        return Math.max(-0.7, Math.min(0.2, v));
+    }
 
     function resize() {
         const dpr = Math.min(window.devicePixelRatio || 1, 2.0);
@@ -254,13 +323,49 @@
         }
     }
 
+    function onPointerMove(e) {
+        if (!dragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        targetYaw += dx * 0.004;
+        targetPitch = clampPitch(targetPitch + dy * 0.004);
+    }
+
+    function onPointerDown(e) {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        if (canvas.setPointerCapture) {
+            canvas.setPointerCapture(e.pointerId);
+        }
+    }
+
+    function onPointerUp(e) {
+        dragging = false;
+        if (canvas.releasePointerCapture) {
+            canvas.releasePointerCapture(e.pointerId);
+        }
+    }
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointerleave', onPointerUp);
+
     function render(now) {
         resize();
         const t = (now - start) * 0.001;
 
+        yaw += (targetYaw - yaw) * 0.08;
+        pitch += (targetPitch - pitch) * 0.08;
+
         gl.uniform1f(timeLoc, t);
         gl.uniform2f(resolutionLoc, gl.canvas.width, gl.canvas.height);
         gl.uniform1f(seedLoc, seed);
+        gl.uniform2f(viewLoc, yaw, pitch);
+        gl.uniform1f(qualityLoc, baseQuality);
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 

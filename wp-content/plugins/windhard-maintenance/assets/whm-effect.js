@@ -1,5 +1,5 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-07-15-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-07-15-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-07-17-01');
+window.__WHM_EFFECT_VERSION = 'PR-2024-07-17-01';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
@@ -184,11 +184,15 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
         vec3 mountainLayer(vec2 uv, float t, float scale, float height, float fog) {
             float offset = t * 0.02 * scale;
-            float h = ridge(vec2(uv.x * scale + offset, 0.0)) * height;
+            vec2 ridgeUv = vec2(uv.x * scale + offset, uv.y * 0.35);
+            float h = ridge(ridgeUv) * height;
+            float eps = 0.002;
+            float hx = ridge(ridgeUv + vec2(eps, 0.0)) * height;
+            float hy = ridge(ridgeUv + vec2(0.0, eps)) * height;
             float base = 0.15 + height * 0.5;
             float y = uv.y;
             float mask = smoothstep(h + base + 0.01, h + base - 0.04, y);
-            float slope = clamp(abs(dFdx(h)) + abs(dFdy(h)), 0.0, 1.0);
+            float slope = clamp((abs(hx - h) + abs(hy - h)) / eps, 0.0, 1.0);
             float snow = smoothstep(0.2, 0.6, h) * (1.0 - slope * 0.5);
             vec3 rock = vec3(0.25, 0.32, 0.42);
             vec3 ice = vec3(0.82, 0.88, 0.94);

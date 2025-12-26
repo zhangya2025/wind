@@ -68,81 +68,106 @@
         float fbm(vec2 p) {
             float f = 0.0;
             float w = 0.5;
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 5; i++) {
                 f += w * noise(p);
-                p *= 2.3;
-                w *= 0.5;
+                p *= 2.12;
+                w *= 0.55;
             }
             return f;
         }
 
+        float gustPulse(float t) {
+            float n = fbm(vec2(t * 0.08, t * 0.05));
+            return smoothstep(0.35, 0.75, n);
+        }
+
         vec2 windField(vec2 uv, float t) {
-            float baseAngle = 1.1;
-            float baseMag = 0.9;
-            float gustNoise = fbm(vec2(t * 0.05, 0.3));
-            float gust = smoothstep(0.2, 0.8, gustNoise) * 0.8;
-            float angle = baseAngle + noise(vec2(t * 0.05, uv.y * 0.8)) * 0.8;
-            float mag = baseMag + gust + noise(vec2(t * 0.1, uv.x * 0.7)) * 0.3;
+            float baseAngle = 1.05;
+            float baseMag = 0.85;
+            float gust = gustPulse(t) * 0.9;
+            float angle = baseAngle + noise(vec2(t * 0.06, uv.y * 0.7)) * 1.0;
+            float mag = baseMag + gust + noise(vec2(t * 0.12, uv.x * 0.6)) * 0.35;
             return vec2(cos(angle), sin(angle)) * mag;
         }
 
-        float snowShape(vec2 p, float aspect) {
+        float vignette(vec2 p) {
+            float v = smoothstep(1.2, 0.35, length(p - 0.5));
+            return v;
+        }
+
+        float snowSdf(vec2 p, float aspect) {
             p.x *= aspect;
             vec2 ap = abs(p);
-            float lens = max(ap.x * 0.9 + ap.y * 0.6, length(p) * 0.8);
-            return smoothstep(0.18, 0.0, lens);
+            float r = max(ap.x * 0.8 + ap.y * 0.5, length(p) * 0.65);
+            return smoothstep(0.18, 0.0, r);
         }
 
-        float streakSample(vec2 uv, vec2 dir, float scale, float speed, float size) {
-            vec2 gv = fract(uv * scale + dir * speed * u_time) - 0.5;
-            vec2 id = floor(uv * scale + dir * speed * u_time);
-            vec2 offset = (hash(id + 1.7) - 0.5) * 0.6;
-            float aspect = mix(0.6, 1.4, hash(id + 2.5));
-            vec2 p = gv + offset;
-            float shape = snowShape(p / size, aspect);
-            return shape;
-        }
-
-        float layeredSnow(vec2 uv, vec2 wind, float scale, float speed, float size, int streaks) {
-            float accum = 0.0;
+        float streakedSnow(vec2 uv, vec2 wind, float scale, float speed, float size, int streakSamples) {
             vec2 dir = normalize(wind + vec2(0.001, 0.0));
-            float stepLen = 0.015 * length(wind);
+            float stepLen = 0.02 * length(wind) * max(1.0, size);
+            float accum = 0.0;
             for (int i = 0; i < 5; i++) {
-                if (i >= streaks) break;
-                float w = exp(-float(i) * 0.7);
-                vec2 offset = dir * stepLen * float(i);
-                accum += w * streakSample(uv + offset, wind, scale, speed, size);
+                if (i >= streakSamples) break;
+                float w = exp(-float(i) * 0.55);
+                vec2 jitter = vec2(hash(uv * scale + float(i)), hash(uv * scale + float(i) + 1.3)) - 0.5;
+                vec2 offset = dir * stepLen * float(i) + jitter * 0.05;
+                vec2 cell = uv * scale + dir * speed * u_time + offset;
+                vec2 gv = fract(cell) - 0.5;
+                vec2 id = floor(cell);
+                float aspect = mix(0.7, 1.5, hash(id + 2.3));
+                vec2 p = gv + (hash(id + 0.7) - 0.5) * 0.6;
+                float shape = snowSdf(p / size, aspect);
+                accum += w * shape;
             }
             return accum;
         }
 
+        float fogLayer(vec2 p, vec2 wind) {
+            vec2 fogUV = p * vec2(1.2, 1.5) + wind * (u_time * 0.03);
+            float f = fbm(fogUV * 1.25);
+            float depth = smoothstep(0.0, 1.0, 1.0 - p.y * 0.85);
+            return smoothstep(0.25, 0.9, f) * depth;
+        }
+
+        float snowLayer(vec2 p, vec2 wind, float scale, float speed, float size, int streaks) {
+            vec2 dir = normalize(wind + vec2(0.001, 0.0));
+            vec2 cell = p * scale + dir * speed * u_time;
+            vec2 gv = fract(cell) - 0.5;
+            vec2 id = floor(cell);
+            float jitter = hash(id + 1.5) - 0.5;
+            gv += vec2(jitter, hash(id + 3.7) - 0.5) * 0.35;
+            float aspect = mix(0.85, 1.35, hash(id + 2.9));
+            float base = snowSdf(gv / size, aspect);
+            if (streaks <= 1) {
+                return base;
+            }
+            float streak = streakedSnow(p, wind, scale, speed, size, streaks);
+            return max(base, streak);
+        }
+
         void main() {
-            vec2 uv = v_uv;
-            vec2 p = uv;
+            vec2 p = v_uv;
             p.y = 1.0 - p.y;
+
             vec2 wind = windField(p, u_time);
 
-            vec3 bgTop = vec3(0.05, 0.09, 0.14);
-            vec3 bgBot = vec3(0.04, 0.08, 0.12);
+            vec3 bgTop = vec3(0.035, 0.055, 0.085);
+            vec3 bgBot = vec3(0.06, 0.09, 0.13);
             vec3 bg = mix(bgTop, bgBot, p.y);
 
-            vec2 fogUV = p * vec2(1.0, 1.2) + wind * (u_time * 0.02);
-            float fogBase = fbm(fogUV * 1.3);
-            float fogAmount = smoothstep(0.2, 0.9, fogBase) * smoothstep(0.0, 1.0, 1.0 - p.y * 0.8);
-            vec3 fogColor = vec3(0.75, 0.82, 0.9);
+            float fog = fogLayer(p, wind);
+            vec3 fogColor = vec3(0.8, 0.86, 0.93);
 
-            float farLayer = layeredSnow(p * 0.9, wind * 0.4, 14.0, 0.45, 0.8, 1);
-            float midLayer = layeredSnow(p * 1.3, wind * 0.8, 22.0, 0.7, 0.65, 2);
-            float nearLayer = layeredSnow(p * 1.8, wind * 1.2, 32.0, 1.0, 0.55, 5);
+            float far = fog * 0.65;
+            float mid = snowLayer(p * 1.2, wind * 0.9, 18.0, 0.65, 0.55, 2);
+            float near = snowLayer(p * 1.7, wind * 1.3, 24.0, 1.05, 0.8, 5);
 
-            float snowAlpha = clamp(farLayer * 0.6 + midLayer * 0.9 + nearLayer * 1.2, 0.0, 1.8);
+            float snowAlpha = clamp(far * 0.8 + mid * 0.9 + near * 1.3, 0.0, 1.6);
             vec3 snowColor = vec3(0.92, 0.97, 1.0);
 
-            float vignette = smoothstep(1.2, 0.35, length(p - 0.5));
-
-            vec3 color = mix(bg, fogColor, fogAmount * 0.35);
-            color = mix(color, snowColor, snowAlpha * 0.75);
-            color *= vignette;
+            vec3 color = mix(bg, fogColor, fog * 0.6);
+            color = mix(color, snowColor, snowAlpha);
+            color *= vignette(p);
 
             float dither = (hash(gl_FragCoord.xy / u_resolution.xy + u_seed) - 0.5) / 255.0;
             color += dither;

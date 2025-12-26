@@ -158,7 +158,7 @@ final class Wind_Warehouse_Portal {
             'generate'        => 'wh_generate_codes',
             'ship'            => 'wh_ship_codes',
             'reset-b'         => ['wh_reset_consumer_count_internal', 'wh_reset_consumer_count_dealer'],
-            'monitor-hq'      => 'wh_view_reports',
+            'monitor-hq'      => ['wh_view_reports', 'manage_options'],
             'reports-monthly' => 'wh_view_reports',
             'reports-yearly'  => 'wh_view_reports',
         ];
@@ -223,6 +223,10 @@ final class Wind_Warehouse_Portal {
 
         if ($view_key === 'reset-b') {
             return Wind_Warehouse_Query::render_reset_b_view();
+        }
+
+        if ($view_key === 'monitor-hq') {
+            return self::render_monitor_hq_view();
         }
 
         return '<p>' . sprintf(
@@ -2404,6 +2408,283 @@ final class Wind_Warehouse_Portal {
 
         wp_safe_redirect($redirect_url);
         exit;
+    }
+
+
+    private static function render_monitor_hq_view(): string {
+        if (!is_user_logged_in() || (!current_user_can('manage_options') && !current_user_can('wh_view_reports'))) {
+            return '<p>' . esc_html__('Forbidden', 'wind-warehouse') . '</p>';
+        }
+
+        global $wpdb;
+        $events_table  = $wpdb->prefix . 'wh_events';
+        $codes_table   = $wpdb->prefix . 'wh_codes';
+        $skus_table    = $wpdb->prefix . 'wh_skus';
+        $dealers_table = $wpdb->prefix . 'wh_dealers';
+
+        $code_q = isset($_GET['code']) ? sanitize_text_field(wp_unslash($_GET['code'])) : '';
+
+        $date_from_raw = isset($_GET['date_from']) ? sanitize_text_field(wp_unslash($_GET['date_from'])) : '';
+        $date_to_raw   = isset($_GET['date_to']) ? sanitize_text_field(wp_unslash($_GET['date_to'])) : '';
+        $date_from_ts  = ($date_from_raw !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from_raw)) ? strtotime($date_from_raw . ' 00:00:00') : false;
+        $date_to_ts    = ($date_to_raw !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to_raw)) ? strtotime($date_to_raw . ' 23:59:59') : false;
+
+        if ($date_from_ts !== false && $date_to_ts !== false && $date_from_ts > $date_to_ts) {
+            [$date_from_ts, $date_to_ts] = [$date_to_ts, $date_from_ts];
+        }
+
+        $date_from = $date_from_ts !== false ? gmdate('Y-m-d H:i:s', $date_from_ts) : '';
+        $date_to   = $date_to_ts !== false ? gmdate('Y-m-d H:i:s', $date_to_ts) : '';
+
+        $days = isset($_GET['days']) ? absint($_GET['days']) : 30;
+        if ($days < 1 || $days > 365) {
+            $days = 30;
+        }
+
+        $per_page = isset($_GET['per_page']) ? absint($_GET['per_page']) : 20;
+        if (!in_array($per_page, [20, 50, 100], true)) {
+            $per_page = 20;
+        }
+
+        $page = isset($_GET['paged']) ? absint($_GET['paged']) : 1;
+        if ($page < 1) {
+            $page = 1;
+        }
+        $offset = ($page - 1) * $per_page;
+
+        $b_threshold = isset($_GET['b_min']) ? absint($_GET['b_min']) : 3;
+        if ($b_threshold < 0 || $b_threshold > 99999) {
+            $b_threshold = 3;
+        }
+
+        $export = isset($_GET['export']) && $_GET['export'] === '1';
+
+        $where_events   = ['e.event_type = %s'];
+        $params_events  = ['consumer_query_unshipped'];
+
+        if ($code_q !== '') {
+            $where_events[] = 'e.code = %s';
+            $params_events[] = $code_q;
+        }
+
+        if ($date_from !== '' && $date_to !== '') {
+            $where_events[] = 'e.created_at BETWEEN %s AND %s';
+            $params_events[] = $date_from;
+            $params_events[] = $date_to;
+        } elseif ($date_from !== '') {
+            $where_events[] = 'e.created_at >= %s';
+            $params_events[] = $date_from;
+        } elseif ($date_to !== '') {
+            $where_events[] = 'e.created_at <= %s';
+            $params_events[] = $date_to;
+        } else {
+            $where_events[] = 'e.created_at >= DATE_SUB(%s, INTERVAL %d DAY)';
+            $params_events[] = current_time('mysql');
+            $params_events[] = $days;
+        }
+
+        $where_clause_events = 'WHERE ' . implode(' AND ', $where_events);
+
+        $sql_events_base =
+            "FROM {$events_table} e " .
+            "LEFT JOIN {$codes_table} c ON e.code_id = c.id " .
+            "LEFT JOIN {$skus_table} s ON c.sku_id = s.id " .
+            "LEFT JOIN {$dealers_table} d ON c.dealer_id = d.id " .
+            $where_clause_events;
+
+        $total_events = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) {$sql_events_base}", $params_events));
+
+        $events = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT e.id, e.created_at, e.code, e.ip, e.meta_json, c.status AS code_status, c.shipped_at, " .
+                "s.name AS sku_name, s.sku_code, d.name AS dealer_name, d.dealer_code " .
+                "{$sql_events_base} ORDER BY e.id DESC LIMIT %d OFFSET %d",
+                array_merge($params_events, [$per_page, $offset])
+            ),
+            ARRAY_A
+        );
+
+        $where_codes  = [];
+        $params_codes = [];
+
+        if ($code_q !== '') {
+            $where_codes[] = 'c.code = %s';
+            $params_codes[] = $code_q;
+        }
+
+        $where_codes[] = '(COALESCE(c.consumer_query_count_lifetime, 0) - COALESCE(c.consumer_query_offset, 0)) >= %d';
+        $params_codes[] = $b_threshold;
+
+        $where_clause_codes = !empty($where_codes) ? 'WHERE ' . implode(' AND ', $where_codes) : '';
+
+        $codes = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT c.id, c.code, c.status, c.shipped_at, " .
+                "COALESCE(c.internal_query_count, 0) AS a_count, " .
+                "COALESCE(c.consumer_query_count_lifetime, 0) AS b_lifetime, " .
+                "COALESCE(c.consumer_query_offset, 0) AS b_offset, " .
+                "(COALESCE(c.consumer_query_count_lifetime, 0) - COALESCE(c.consumer_query_offset, 0)) AS b_value, " .
+                "s.name AS sku_name, s.sku_code, d.name AS dealer_name, d.dealer_code " .
+                "FROM {$codes_table} c " .
+                "LEFT JOIN {$skus_table} s ON c.sku_id = s.id " .
+                "LEFT JOIN {$dealers_table} d ON c.dealer_id = d.id " .
+                "{$where_clause_codes} " .
+                "ORDER BY b_value DESC, c.id DESC LIMIT 100",
+                $params_codes
+            ),
+            ARRAY_A
+        );
+
+        if ($export) {
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename=ww_monitor_unshipped_events.csv');
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['created_at', 'code', 'sku', 'dealer', 'status', 'shipped_at', 'ip']);
+
+            if (is_array($events)) {
+                foreach ($events as $r) {
+                    $sku    = trim((string) ($r['sku_code'] ?? '') . ' ' . (string) ($r['sku_name'] ?? ''));
+                    $dealer = trim((string) ($r['dealer_code'] ?? '') . ' ' . (string) ($r['dealer_name'] ?? ''));
+                    fputcsv(
+                        $out,
+                        [
+                            $r['created_at'] ?? '',
+                            $r['code'] ?? '',
+                            $sku,
+                            $dealer,
+                            $r['code_status'] ?? '',
+                            $r['shipped_at'] ?? '',
+                            $r['ip'] ?? '',
+                        ]
+                    );
+                }
+            }
+
+            fclose($out);
+            exit;
+        }
+
+        $query_args = [
+            'wh'        => 'monitor-hq',
+            'code'      => $code_q,
+            'days'      => $days,
+            'per_page'  => $per_page,
+            'b_min'     => $b_threshold,
+            'paged'     => $page,
+            'date_from' => $date_from_raw,
+            'date_to'   => $date_to_raw,
+        ];
+
+        $html  = '<div class="ww-monitor-hq">';
+        $html .= '<h2>' . esc_html__('HQ Monitor', 'wind-warehouse') . '</h2>';
+
+        $html .= '<form method="get" style="margin: 12px 0;">';
+        $html .= '<input type="hidden" name="wh" value="monitor-hq" />';
+        $html .= '<label>' . esc_html__('Code', 'wind-warehouse') . ' <input type="text" name="code" value="' . esc_attr($code_q) . '" /></label> ';
+        $html .= '<label>' . esc_html__('Days', 'wind-warehouse') . ' <input type="number" min="1" max="365" name="days" value="' . esc_attr((string) $days) . '" /></label> ';
+        $html .= '<label>' . esc_html__('Date from', 'wind-warehouse') . ' <input type="date" name="date_from" value="' . esc_attr($date_from_raw) . '" /></label> ';
+        $html .= '<label>' . esc_html__('Date to', 'wind-warehouse') . ' <input type="date" name="date_to" value="' . esc_attr($date_to_raw) . '" /></label> ';
+        $html .= '<label>' . esc_html__('Per page', 'wind-warehouse') . ' <select name="per_page">';
+        foreach ([20, 50, 100] as $pp) {
+            $selected = $pp === $per_page ? ' selected' : '';
+            $html    .= '<option value="' . esc_attr((string) $pp) . '"' . $selected . '>' . esc_html((string) $pp) . '</option>';
+        }
+        $html .= '</select></label> ';
+        $html .= '<label>' . esc_html__('B min', 'wind-warehouse') . ' <input type="number" min="0" max="99999" name="b_min" value="' . esc_attr((string) $b_threshold) . '" /></label> ';
+        $html .= '<button type="submit">' . esc_html__('Apply', 'wind-warehouse') . '</button> ';
+
+        $export_url = add_query_arg(array_merge($query_args, ['export' => '1']), self::portal_url());
+        $html      .= '<a class="button" href="' . esc_url($export_url) . '">' . esc_html__('Export CSV', 'wind-warehouse') . '</a>';
+        $html      .= '</form>';
+
+        $html .= '<h3>' . esc_html__('Unshipped consumer queries', 'wind-warehouse') . '</h3>';
+        $html .= '<p>' . esc_html(sprintf(__('Total: %d', 'wind-warehouse'), $total_events)) . '</p>';
+        $html .= '<table class="ww-table"><thead><tr>';
+        $html .= '<th>' . esc_html__('Time', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Code', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Dealer', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('IP', 'wind-warehouse') . '</th>';
+        $html .= '</tr></thead><tbody>';
+
+        if (!empty($events)) {
+            foreach ($events as $r) {
+                $sku    = trim((string) ($r['sku_code'] ?? '') . ' ' . (string) ($r['sku_name'] ?? ''));
+                $dealer = trim((string) ($r['dealer_code'] ?? '') . ' ' . (string) ($r['dealer_name'] ?? ''));
+                $html  .= '<tr>';
+                $html  .= '<td>' . esc_html($r['created_at'] ?? '') . '</td>';
+                $html  .= '<td>' . esc_html($r['code'] ?? '') . '</td>';
+                $html  .= '<td>' . esc_html($sku) . '</td>';
+                $html  .= '<td>' . esc_html($dealer) . '</td>';
+                $html  .= '<td>' . esc_html((string) ($r['code_status'] ?? '')) . '</td>';
+                $html  .= '<td>' . esc_html($r['ip'] ?? '') . '</td>';
+                $html  .= '</tr>';
+            }
+        } else {
+            $html .= '<tr><td colspan="6">' . esc_html__('No records.', 'wind-warehouse') . '</td></tr>';
+        }
+
+        $html .= '</tbody></table>';
+
+        $total_pages = (int) ceil($total_events / $per_page);
+        if ($total_pages > 1) {
+            $html .= '<div style="margin-top:10px;">';
+            for ($p = 1; $p <= $total_pages; $p++) {
+                $page_url = add_query_arg(
+                    [
+                        'wh'        => 'monitor-hq',
+                        'code'      => $code_q,
+                        'days'      => $days,
+                        'per_page'  => $per_page,
+                        'b_min'     => $b_threshold,
+                        'paged'     => $p,
+                        'date_from' => $date_from_raw,
+                        'date_to'   => $date_to_raw,
+                    ],
+                    self::portal_url()
+                );
+
+                $html .= $p === $page
+                    ? '<strong style="margin-right:6px;">' . esc_html((string) $p) . '</strong>'
+                    : '<a style="margin-right:6px;" href="' . esc_url($page_url) . '">' . esc_html((string) $p) . '</a>';
+            }
+            $html .= '</div>';
+        }
+
+        $html .= '<h3 style="margin-top:18px;">' . esc_html__('High B codes (Top 100)', 'wind-warehouse') . '</h3>';
+        $html .= '<table class="ww-table"><thead><tr>';
+        $html .= '<th>' . esc_html__('Code', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Dealer', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('A', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('B', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('Shipped at', 'wind-warehouse') . '</th>';
+        $html .= '</tr></thead><tbody>';
+
+        if (!empty($codes)) {
+            foreach ($codes as $r) {
+                $sku    = trim((string) ($r['sku_code'] ?? '') . ' ' . (string) ($r['sku_name'] ?? ''));
+                $dealer = trim((string) ($r['dealer_code'] ?? '') . ' ' . (string) ($r['dealer_name'] ?? ''));
+                $html  .= '<tr>';
+                $html  .= '<td>' . esc_html($r['code'] ?? '') . '</td>';
+                $html  .= '<td>' . esc_html($sku) . '</td>';
+                $html  .= '<td>' . esc_html($dealer) . '</td>';
+                $html  .= '<td>' . esc_html($r['status'] ?? '') . '</td>';
+                $html  .= '<td>' . esc_html((string) ($r['a_count'] ?? '0')) . '</td>';
+                $html  .= '<td>' . esc_html((string) ($r['b_value'] ?? '0')) . '</td>';
+                $html  .= '<td>' . esc_html($r['shipped_at'] ?? '') . '</td>';
+                $html  .= '</tr>';
+            }
+        } else {
+            $html .= '<tr><td colspan="7">' . esc_html__('No records.', 'wind-warehouse') . '</td></tr>';
+        }
+
+        $html .= '</tbody></table>';
+        $html .= '</div>';
+
+        return $html;
     }
 
     private static function render_user_info(WP_User $user): string {

@@ -9,7 +9,7 @@ final class Wind_Warehouse_Query {
     private const LEGACY_SLUG = 'verify';
     private const RATE_LIMIT_MAX = 10;
     private const RATE_LIMIT_WINDOW = MINUTE_IN_SECONDS;
-    private const CODE_REGEX = '/^(?:[A-Fa-f0-9]{20}|[A-Fa-f0-9]{32})$/';
+    private const CODE_REGEX = '/^[A-Fa-f0-9]{18,20}$/';
     private static $table_columns_cache = [];
 
     public static function register_shortcode(): void {
@@ -116,10 +116,12 @@ final class Wind_Warehouse_Query {
         $update_fields = [];
         $update_formats = [];
 
-        if ($is_internal) {
-            $update_fields['internal_query_count'] = (int) ($code_row['internal_query_count'] ?? 0) + 1;
-            $update_formats[] = '%d';
-        } else {
+        // 规则：A=行为总数（不可置零）——任何查询都要 +1
+        $update_fields['internal_query_count'] = (int) ($code_row['internal_query_count'] ?? 0) + 1;
+        $update_formats[] = '%d';
+
+        // 规则：B=消费者端展示次数（可置零）——仅游客/普通注册用户查询时 +1
+        if (!$is_internal) {
             $update_fields['consumer_query_count_lifetime'] = (int) ($code_row['consumer_query_count_lifetime'] ?? 0) + 1;
             $update_formats[] = '%d';
             if (array_key_exists('last_consumer_query_at', $code_row)) {
@@ -209,6 +211,8 @@ final class Wind_Warehouse_Query {
             $html .= '<p>' . esc_html__('产品名', 'wind-warehouse') . '：' . esc_html($row['sku_name'] ?? '') . '</p>';
             $html .= '<p>' . esc_html__('防伪码', 'wind-warehouse') . '：' . esc_html($code) . '</p>';
             $html .= '<p>' . esc_html__('经销商', 'wind-warehouse') . '：' . esc_html($dealer_display) . '</p>';
+            // 规则：对外必须展示 B
+            $html .= '<p>' . esc_html__('查询次数', 'wind-warehouse') . '（B）：' . esc_html($b_value) . '</p>';
             $html .= '</div>';
             return $html;
         }

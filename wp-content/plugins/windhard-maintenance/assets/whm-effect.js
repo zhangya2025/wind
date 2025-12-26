@@ -1,5 +1,5 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-06-20-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-06-20-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-07-05-01');
+window.__WHM_EFFECT_VERSION = 'PR-2024-07-05-01';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
@@ -33,10 +33,6 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
     const prefersReduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduce) {
         body.classList.add('whm-reduced');
-        if (loading) {
-            loading.classList.add('hidden');
-        }
-        return;
     }
 
     const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
@@ -46,21 +42,88 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
     }
 
     const vertexSrc = `
+        precision highp float;
         attribute vec2 a_position;
+
+        uniform mat4 u_proj;
+        uniform mat4 u_view;
+        uniform float u_time;
+        uniform vec2 u_wind;
+        uniform float u_height;
+        uniform vec3 u_camera;
+        uniform vec2 u_angles;
+
+        const int WAVE_COUNT = 7;
+        uniform vec4 u_waveA[WAVE_COUNT]; // dir.x, dir.y, amplitude, steepness
+        uniform vec4 u_waveB[WAVE_COUNT]; // wavelength, speed, phase, unused
+
+        varying vec3 v_world;
+        varying vec3 v_normal;
+        varying float v_foam;
+
+        float hash11(float p) {
+            return fract(sin(p * 17.13) * 43758.5453);
+        }
+
         void main() {
-            gl_Position = vec4(a_position, 0.0, 1.0);
+            vec2 posXZ = a_position;
+            float t = u_time;
+            vec3 displaced = vec3(posXZ.x, 0.0, posXZ.y);
+            vec3 normal = vec3(0.0, 1.0, 0.0);
+            float foam = 0.0;
+
+            for (int i = 0; i < WAVE_COUNT; i++) {
+                vec4 wa = u_waveA[i];
+                vec4 wb = u_waveB[i];
+                vec2 dir = normalize(wa.xy + u_wind * 0.15);
+                float amp = wa.z * u_height;
+                float steep = wa.w;
+                float k = 6.28318 / wb.x;
+                float speed = wb.y;
+                float phase = dot(dir, posXZ) * k + t * speed + wb.z;
+                float s = sin(phase);
+                float c = cos(phase);
+                float q = steep / float(WAVE_COUNT);
+
+                displaced.x += dir.x * (q * amp * c);
+                displaced.z += dir.y * (q * amp * c);
+                displaced.y += amp * s;
+
+                normal.x -= dir.x * amp * k * s;
+                normal.z -= dir.y * amp * k * s;
+                normal.y += steep * amp * c;
+
+                float crest = smoothstep(0.55, 1.15, abs(s) * steep);
+                foam += crest;
+            }
+
+            float tiltMod = mix(1.0, 0.85, clamp(length(u_wind) * 0.6, 0.0, 1.0));
+            normal = normalize(normal * vec3(1.0, tiltMod, 1.0));
+            foam = clamp(foam / float(WAVE_COUNT), 0.0, 1.0);
+
+            v_world = displaced;
+            v_normal = normal;
+            v_foam = foam;
+
+            gl_Position = u_proj * u_view * vec4(displaced, 1.0);
         }
     `;
 
     const fragmentSrc = `
         precision highp float;
+        varying vec3 v_world;
+        varying vec3 v_normal;
+        varying float v_foam;
+
         uniform vec2 u_resolution;
         uniform float u_time;
-        uniform vec2 u_pointer;
+        uniform vec3 u_camera;
+        uniform vec3 u_light;
+        uniform vec2 u_angles;
 
         float hash(vec2 p) {
-            p = fract(p * vec2(123.34, 345.45));
-            p += dot(p, p + 34.345);
+            p = fract(p * vec2(123.34, 456.21));
+            p += dot(p, p + 45.32);
             return fract(p.x * p.y);
         }
 
@@ -78,131 +141,49 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         float fbm(vec2 p) {
             float v = 0.0;
             float a = 0.5;
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 4; i++) {
                 v += a * noise(p);
-                p *= 2.0;
+                p *= 2.05;
                 a *= 0.55;
             }
             return v;
         }
 
-        // Wave packed as vec4: dir.x, dir.y, amplitude, angular frequency.
-        vec4 makeWave(vec2 dir, float amp, float wl) {
-            vec2 d = normalize(dir);
-            return vec4(d, amp, 6.28318 / wl);
-        }
-
-        float wavePhase(vec2 p, float t, vec4 w, float speed) {
-            return dot(w.xy, p) * w.w + t * speed;
-        }
-
-        vec3 oceanNormalHeight(vec2 pos, float t, out float h) {
-            vec4 waves[7];
-            float speeds[7];
-            float scales[7];
-
-            waves[0] = makeWave(vec2(1.0, 0.2), 1.8, 16.0); speeds[0] = 0.9; scales[0] = 1.0;   // hero swell
-            waves[1] = makeWave(vec2(0.9, 0.35), 1.2, 11.0); speeds[1] = 1.05; scales[1] = 0.85; // second hero
-            waves[2] = makeWave(vec2(-0.45, 1.0), 0.65, 6.5); speeds[2] = 1.4; scales[2] = 0.9;
-            waves[3] = makeWave(vec2(0.2, 1.0), 0.45, 4.0);  speeds[3] = 1.75; scales[3] = 0.75;
-            waves[4] = makeWave(vec2(1.0, -0.15), 0.35, 3.2); speeds[4] = 2.1; scales[4] = 0.7;
-            waves[5] = makeWave(vec2(-0.8, 0.6), 0.28, 2.4); speeds[5] = 2.5; scales[5] = 0.65;
-            waves[6] = makeWave(vec2(0.35, -1.0), 0.2, 1.8); speeds[6] = 2.9; scales[6] = 0.55;
-
-            // gentle gusts to modulate large waves
-            float gust = fbm(pos * 0.08 + vec2(t * 0.15, t * 0.07));
-            float heroTilt = mix(0.9, 1.25, smoothstep(0.35, 0.75, gust));
-            scales[0] *= heroTilt;
-            scales[1] *= mix(0.95, 1.15, gust);
-
-            h = 0.0;
-            vec3 grad = vec3(0.0);
-            for (int i = 0; i < 7; i++) {
-                vec4 w = waves[i];
-                float speed = speeds[i];
-                float scale = scales[i];
-                float phase = wavePhase(pos, t, w, speed);
-                float s = sin(phase);
-                float c = cos(phase);
-                float amp = w.z * scale;
-                h += amp * s;
-                grad.x += -w.x * amp * w.w * c;
-                grad.z += -w.y * amp * w.w * c;
-            }
-
-            float tilt = clamp(1.0 - 0.32 * length(grad.xz), 0.35, 1.0);
-            vec3 normal = normalize(vec3(grad.x, tilt, grad.z));
-            return normal;
-        }
-
-        vec3 applyFoam(vec3 color, float foam) {
-            float foamLine = smoothstep(0.45, 0.75, foam);
-            vec3 foamColor = vec3(0.82, 0.89, 0.97);
-            return mix(color, foamColor, foamLine);
-        }
-
         void main() {
-            vec2 uv = (gl_FragCoord.xy / u_resolution.xy) * 2.0 - 1.0;
-            uv.x *= u_resolution.x / u_resolution.y;
+            vec3 N = normalize(v_normal);
+            vec3 V = normalize(u_camera - v_world);
+            vec3 L = normalize(u_light);
+            vec3 H = normalize(L + V);
 
-            float yaw = mix(-0.35, 0.35, u_pointer.x);
-            float pitch = mix(-0.08, 0.15, u_pointer.y);
+            float diff = max(dot(N, L), 0.0);
+            float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
 
-            vec3 camPos = vec3(0.0, 1.35, -4.6);
-            vec3 target = vec3(0.0, 0.35, 0.0);
-            float cy = cos(yaw); float sy = sin(yaw);
-            float cp = cos(pitch); float sp = sin(pitch);
-            vec3 forward = normalize(vec3(sy*cp, sp, cy*cp));
-            vec3 right = normalize(vec3(cy, 0.0, -sy));
-            vec3 up = normalize(cross(right, forward));
+            vec3 waterDeep = vec3(0.02, 0.08, 0.14);
+            vec3 waterShallow = vec3(0.05, 0.17, 0.25);
+            float viewLift = clamp(0.3 + V.y * 0.6, 0.0, 1.0);
+            vec3 base = mix(waterDeep, waterShallow, viewLift);
 
-            vec3 rd = normalize(forward + right * uv.x + up * uv.y);
+            vec3 skyTop = vec3(0.18, 0.34, 0.52);
+            vec3 skyHorizon = vec3(0.06, 0.12, 0.20);
+            float skyMix = clamp(0.45 + N.y * 0.6, 0.0, 1.0);
+            vec3 reflection = mix(skyHorizon, skyTop, skyMix);
 
-            float t = u_time * 0.4;
+            vec3 color = mix(base, reflection, fresnel * 0.85 + 0.12);
+            float spec = pow(max(dot(N, H), 0.0), 90.0);
+            color += diff * vec3(0.12, 0.20, 0.28) + spec * vec3(0.9, 0.95, 1.0);
 
-            // Find intersection with base ocean plane y=0
-            float planeT = (0.0 - camPos.y) / rd.y;
-            vec3 pos = camPos + rd * planeT;
+            float foamNoise = fbm(v_world.xz * 0.45 + u_time * vec2(0.4, 0.25) + u_angles * 3.5);
+            float foamLine = smoothstep(0.65, 0.95, v_foam + foamNoise * 0.35);
+            vec3 foamColor = vec3(0.82, 0.9, 0.98);
+            color = mix(color, foamColor, foamLine);
 
-            float h;
-            vec3 n = oceanNormalHeight(pos.xz, t, h);
-            pos.y = h;
-
-            // Re-evaluate normal with small offsets for better shading
-            float eps = 0.08;
-            float hX; float hZ;
-            vec3 nX = oceanNormalHeight(pos.xz + vec2(eps, 0.0), t, hX);
-            vec3 nZ = oceanNormalHeight(pos.xz + vec2(0.0, eps), t, hZ);
-            vec3 normal = normalize(cross(vec3(eps, hX - h, 0.0), vec3(0.0, hZ - h, eps)) + n * 0.6);
-
-            vec3 lightDir = normalize(vec3(-0.55, 0.82, -0.35));
-            float diff = max(dot(normal, lightDir), 0.0);
-
-            vec3 skyTop = vec3(0.14, 0.28, 0.46);
-            vec3 skyHorizon = vec3(0.05, 0.11, 0.2);
-            float skyMix = clamp(0.45 + normal.y * 0.6, 0.0, 1.0);
-            vec3 skyColor = mix(skyHorizon, skyTop, skyMix);
-
-            float fresnel = pow(1.0 - max(dot(normal, -rd), 0.0), 5.0);
-            vec3 baseWater = vec3(0.02, 0.09, 0.16);
-            vec3 reflection = skyColor;
-            vec3 color = mix(baseWater, reflection, fresnel * 0.85 + 0.12);
-
-            vec3 halfDir = normalize(lightDir - rd);
-            float spec = pow(max(dot(normal, halfDir), 0.0), 70.0) * 1.2;
-            color += diff * vec3(0.22, 0.36, 0.46) + spec * vec3(0.9, 0.95, 1.0);
-
-            float slopeFoam = smoothstep(0.5, 1.1, length(vec2(nX.y - h, nZ.y - h)));
-            float foamSeed = fbm(pos.xz * 0.35 + vec2(t * 0.45, t * 0.3));
-            float foam = max(foamSeed, slopeFoam);
-            color = applyFoam(color, foam);
-
-            float dist = length(pos - camPos);
-            float fog = smoothstep(5.0, 18.0, dist);
-            vec3 fogColor = vec3(0.03, 0.07, 0.12);
+            float dist = length(u_camera - v_world);
+            float fog = smoothstep(12.0, 42.0, dist);
+            vec3 fogColor = vec3(0.04, 0.08, 0.12);
             color = mix(color, fogColor, fog);
 
-            float vign = smoothstep(1.2, 0.4, length(uv));
+            vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+            float vign = smoothstep(1.2, 0.35, length(uv - 0.5));
             color *= vign;
 
             float dither = (hash(gl_FragCoord.xy + u_time) - 0.5) / 255.0;
@@ -218,9 +199,9 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         gl.compileShader(shader);
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
             const log = gl.getShaderInfoLog(shader) || 'Unknown shader compile error';
-            const lines = source.split('\n').slice(0, 120).map((line, idx) => `${idx + 1}: ${line}`);
+            const lines = source.split('\n').slice(0, 180).map((line, idx) => `${idx + 1}: ${line}`);
             console.error('Shader compile failed:', log);
-            console.error('Shader source (first 120 lines):\n' + lines.join('\n'));
+            console.error('Shader source (first 180 lines):\n' + lines.join('\n'));
             gl.deleteShader(shader);
             return null;
         }
@@ -251,39 +232,134 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         return;
     }
 
-    const positionLoc = gl.getAttribLocation(program, 'a_position');
-    const timeLoc = gl.getUniformLocation(program, 'u_time');
-    const resolutionLoc = gl.getUniformLocation(program, 'u_resolution');
-    const pointerLoc = gl.getUniformLocation(program, 'u_pointer');
+    const attribPosition = gl.getAttribLocation(program, 'a_position');
+    const uniProj = gl.getUniformLocation(program, 'u_proj');
+    const uniView = gl.getUniformLocation(program, 'u_view');
+    const uniTime = gl.getUniformLocation(program, 'u_time');
+    const uniRes = gl.getUniformLocation(program, 'u_resolution');
+    const uniWind = gl.getUniformLocation(program, 'u_wind');
+    const uniHeight = gl.getUniformLocation(program, 'u_height');
+    const uniCamera = gl.getUniformLocation(program, 'u_camera');
+    const uniLight = gl.getUniformLocation(program, 'u_light');
+    const uniAngles = gl.getUniformLocation(program, 'u_angles');
+    const uniWaveA = gl.getUniformLocation(program, 'u_waveA[0]');
+    const uniWaveB = gl.getUniformLocation(program, 'u_waveB[0]');
 
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        -1, -1,
-         1, -1,
-        -1,  1,
-        -1,  1,
-         1, -1,
-         1,  1,
-    ]), gl.STATIC_DRAW);
+    const waveA = new Float32Array([
+        1.0, 0.3, 1.4, 1.05,
+        0.7, 0.25, 1.1, 0.95,
+        -0.6, 1.0, 0.8, 0.8,
+        0.2, 1.0, 0.55, 0.7,
+        1.0, -0.15, 0.42, 0.6,
+        -0.85, 0.4, 0.35, 0.55,
+        0.4, -1.0, 0.3, 0.5,
+    ]);
+    const waveB = new Float32Array([
+        18.0, 0.9, 0.0, 0.0,
+        13.0, 1.05, 1.3, 0.0,
+        8.0, 1.35, 2.6, 0.0,
+        5.2, 1.85, 3.9, 0.0,
+        3.6, 2.3, 4.9, 0.0,
+        2.8, 2.8, 5.7, 0.0,
+        2.2, 3.15, 6.8, 0.0,
+    ]);
 
-    let pointer = { x: 0.5, y: 0.5 };
-    let lastPointer = { x: 0.5, y: 0.5 };
-
-    function handlePointer(e) {
-        const rect = canvas.getBoundingClientRect();
-        const px = (e.clientX - rect.left) / rect.width;
-        const py = (e.clientY - rect.top) / rect.height;
-        pointer.x = Math.min(Math.max(px, 0), 1);
-        pointer.y = Math.min(Math.max(py, 0), 1);
+    function buildGrid(resolution, span) {
+        const verts = [];
+        const indices = [];
+        for (let y = 0; y <= resolution; y++) {
+            for (let x = 0; x <= resolution; x++) {
+                const u = x / resolution;
+                const v = y / resolution;
+                const px = (u - 0.5) * span;
+                const pz = (v - 0.5) * span;
+                verts.push(px, pz);
+            }
+        }
+        const row = resolution + 1;
+        for (let y = 0; y < resolution; y++) {
+            for (let x = 0; x < resolution; x++) {
+                const i = y * row + x;
+                indices.push(i, i + 1, i + row);
+                indices.push(i + 1, i + row + 1, i + row);
+            }
+        }
+        const vertArray = new Float32Array(verts);
+        const IndexArray = (verts.length / 2 > 65000) ? Uint32Array : Uint16Array;
+        return { positions: vertArray, indices: new IndexArray(indices) };
     }
 
-    window.addEventListener('pointermove', handlePointer);
-    window.addEventListener('touchmove', function(e) {
-        if (e.touches && e.touches.length > 0) {
-            handlePointer(e.touches[0]);
-        }
-    }, { passive: true });
+    function perspective(fov, aspect, near, far) {
+        const f = 1.0 / Math.tan(fov / 2);
+        const nf = 1 / (near - far);
+        return new Float32Array([
+            f / aspect, 0, 0, 0,
+            0, f, 0, 0,
+            0, 0, (far + near) * nf, -1,
+            0, 0, (2 * far * near) * nf, 0,
+        ]);
+    }
+
+    function lookAt(eye, target, up) {
+        const zx = eye[0] - target[0];
+        const zy = eye[1] - target[1];
+        const zz = eye[2] - target[2];
+        let zlen = Math.hypot(zx, zy, zz);
+        const zxN = zx / zlen; const zyN = zy / zlen; const zzN = zz / zlen;
+
+        let xx = up[1] * zzN - up[2] * zyN;
+        let xy = up[2] * zxN - up[0] * zzN;
+        let xz = up[0] * zyN - up[1] * zxN;
+        let xlen = Math.hypot(xx, xy, xz);
+        xx /= xlen; xy /= xlen; xz /= xlen;
+
+        const yx = zyN * xz - zzN * xy;
+        const yy = zzN * xx - zxN * xz;
+        const yz = zxN * xy - zyN * xx;
+
+        return new Float32Array([
+            xx, yx, zxN, 0,
+            xy, yy, zyN, 0,
+            xz, yz, zzN, 0,
+            -(xx * eye[0] + xy * eye[1] + xz * eye[2]),
+            -(yx * eye[0] + yy * eye[1] + yz * eye[2]),
+            -(zxN * eye[0] + zyN * eye[1] + zzN * eye[2]),
+            1,
+        ]);
+    }
+
+    const gridRes = Math.min( Math.max(140, Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.18)), 200);
+    const gridSpan = 14.0;
+    const mesh = buildGrid(gridRes, gridSpan);
+
+    const vao = gl.createVertexArray ? gl.createVertexArray() : null;
+    if (vao && gl.bindVertexArray) {
+        gl.bindVertexArray(vao);
+    }
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+
+    const indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+
+    gl.enableVertexAttribArray(attribPosition);
+    gl.vertexAttribPointer(attribPosition, 2, gl.FLOAT, false, 0, 0);
+
+    if (vao && gl.bindVertexArray) {
+        gl.bindVertexArray(null);
+    }
+
+    gl.useProgram(program);
+    gl.uniform4fv(uniWaveA, waveA);
+    gl.uniform4fv(uniWaveB, waveB);
+    gl.uniform3f(uniLight, -0.55, 0.82, -0.35);
+    gl.uniform1f(uniHeight, prefersReduce ? 0.65 : 1.0);
+
+    const windVec = [0.6, 0.25];
+    gl.uniform2f(uniWind, windVec[0], windVec[1]);
 
     let width = 0;
     let height = 0;
@@ -291,7 +367,7 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         width = window.innerWidth;
         height = window.innerHeight;
-        const qualityScale = width <= 820 ? 0.7 : 1.0;
+        const qualityScale = width <= 820 ? 0.8 : 1.0;
         const cw = Math.floor(width * dpr * qualityScale);
         const ch = Math.floor(height * dpr * qualityScale);
         canvas.width = cw;
@@ -299,34 +375,131 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         canvas.style.width = width + 'px';
         canvas.style.height = height + 'px';
         gl.viewport(0, 0, cw, ch);
+        gl.uniform2f(uniRes, cw, ch);
     }
 
     resize();
     window.addEventListener('resize', resize);
 
-    gl.useProgram(program);
-    gl.enableVertexAttribArray(positionLoc);
-    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+    let yaw = 0.1;
+    let pitch = -0.06;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    function onPointerDown(e) {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+    }
+    function onPointerUp() { dragging = false; }
+    function onPointerMove(e) {
+        if (!dragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        yaw += dx * 0.0022;
+        pitch += dy * 0.002;
+        pitch = Math.max(-0.22, Math.min(0.25, pitch));
+        lastX = e.clientX;
+        lastY = e.clientY;
+    }
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointermove', onPointerMove);
+
+    window.addEventListener('touchstart', function(e) {
+        if (e.touches && e.touches.length > 0) {
+            onPointerDown(e.touches[0]);
+        }
+    }, { passive: true });
+    window.addEventListener('touchend', onPointerUp, { passive: true });
+    window.addEventListener('touchmove', function(e) {
+        if (e.touches && e.touches.length > 0) {
+            onPointerMove(e.touches[0]);
+        }
+    }, { passive: true });
+
+    let paused = false;
+    function togglePause() {
+        paused = !paused;
+        if (!paused) {
+            start = performance.now() - time * 1000;
+        }
+    }
+
+    function toggleFullscreen() {
+        const docEl = document.documentElement;
+        if (!document.fullscreenElement && docEl.requestFullscreen) {
+            docEl.requestFullscreen();
+        } else if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+
+    window.addEventListener('keydown', function(e) {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePause();
+        }
+        if (e.key === 'f' || e.key === 'F') {
+            toggleFullscreen();
+        }
+    });
 
     let start = performance.now();
+    let time = 0;
     let ready = false;
+    const timeScale = prefersReduce ? 0.35 : 1.0;
 
     function draw(now) {
-        const time = (now - start) / 1000;
+        if (!paused) {
+            time = (now - start) / 1000 * timeScale;
+        }
 
-        gl.uniform1f(timeLoc, time);
-        gl.uniform2f(resolutionLoc, canvas.width, canvas.height);
+        const drift = prefersReduce ? 0.0 : 0.02;
+        yaw += Math.sin(time * 0.12) * drift;
+        pitch += Math.cos(time * 0.08) * drift * 0.25;
+        pitch = Math.max(-0.25, Math.min(0.28, pitch));
 
-        lastPointer.x += (pointer.x - lastPointer.x) * 0.05;
-        lastPointer.y += (pointer.y - lastPointer.y) * 0.05;
-        gl.uniform2f(pointerLoc, lastPointer.x, lastPointer.y);
+        const camDist = 5.2;
+        const camHeight = 1.35 + Math.sin(time * 0.15) * 0.08;
+        const cy = Math.cos(yaw); const sy = Math.sin(yaw);
+        const cp = Math.cos(pitch); const sp = Math.sin(pitch);
+        const eye = [Math.sin(yaw) * camDist * cp, camHeight + sp * 0.5, -Math.cos(yaw) * camDist * cp];
+        const target = [0, 0.25 + sp * 0.35, 0];
+        const view = lookAt(eye, target, [0, 1, 0]);
+        const proj = perspective((60 * Math.PI) / 180, canvas.width / canvas.height, 0.1, 60.0);
 
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.useProgram(program);
+        gl.uniformMatrix4fv(uniProj, false, proj);
+        gl.uniformMatrix4fv(uniView, false, view);
+        gl.uniform1f(uniTime, time);
+        gl.uniform3f(uniCamera, eye[0], eye[1], eye[2]);
+        gl.uniform2f(uniAngles, yaw, pitch);
+
+        if (vao && gl.bindVertexArray) {
+            gl.bindVertexArray(vao);
+        } else {
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            gl.enableVertexAttribArray(attribPosition);
+            gl.vertexAttribPointer(attribPosition, 2, gl.FLOAT, false, 0, 0);
+        }
+
+        gl.enable(gl.DEPTH_TEST);
+        gl.clearColor(0.03, 0.06, 0.1, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.drawElements(gl.TRIANGLES, mesh.indices.length, mesh.indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+
+        if (vao && gl.bindVertexArray) {
+            gl.bindVertexArray(null);
+        }
 
         if (!ready && loading) {
             loading.classList.add('hidden');
             ready = true;
         }
+
         requestAnimationFrame(draw);
     }
 

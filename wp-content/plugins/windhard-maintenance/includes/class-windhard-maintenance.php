@@ -35,6 +35,12 @@ class Windhard_Maintenance {
             'send_503' => true,
             'retry_after_minutes' => null,
             'noindex' => true,
+            'headline_text' => '',
+            'headline_color' => '#FFFFFF',
+            'headline_size' => 'xl',
+            'subhead_text' => '',
+            'subhead_color' => '#FFFFFF',
+            'subhead_size' => 'm',
         );
     }
 

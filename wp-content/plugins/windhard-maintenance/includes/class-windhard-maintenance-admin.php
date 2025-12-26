@@ -45,6 +45,20 @@ class Windhard_Maintenance_Admin {
     );
 
     /**
+     * Allowed headline sizes.
+     *
+     * @var array
+     */
+    private $allowed_headline_sizes = array('l', 'xl', 'xxl');
+
+    /**
+     * Allowed subhead sizes.
+     *
+     * @var array
+     */
+    private $allowed_subhead_sizes = array('s', 'm', 'l');
+
+    /**
      * Constructor.
      *
      * @param array $options Options array.
@@ -92,6 +106,12 @@ class Windhard_Maintenance_Admin {
             'mode' => array('label' => __('Mode', 'windhard-maintenance'), 'callback' => 'field_mode'),
             'reason_preset' => array('label' => __('Reason preset', 'windhard-maintenance'), 'callback' => 'field_reason_preset'),
             'reason_custom' => array('label' => __('Custom reason', 'windhard-maintenance'), 'callback' => 'field_reason_custom'),
+            'headline_text' => array('label' => __('Headline text', 'windhard-maintenance'), 'callback' => 'field_headline_text'),
+            'headline_color' => array('label' => __('Headline color', 'windhard-maintenance'), 'callback' => 'field_headline_color'),
+            'headline_size' => array('label' => __('Headline size', 'windhard-maintenance'), 'callback' => 'field_headline_size'),
+            'subhead_text' => array('label' => __('Subhead text', 'windhard-maintenance'), 'callback' => 'field_subhead_text'),
+            'subhead_color' => array('label' => __('Subhead color', 'windhard-maintenance'), 'callback' => 'field_subhead_color'),
+            'subhead_size' => array('label' => __('Subhead size', 'windhard-maintenance'), 'callback' => 'field_subhead_size'),
             'allow_roles' => array('label' => __('Allowed roles', 'windhard-maintenance'), 'callback' => 'field_allow_roles'),
             'ip_whitelist' => array('label' => __('IP whitelist', 'windhard-maintenance'), 'callback' => 'field_ip_whitelist'),
             'login_exempt_paths' => array('label' => __('Login exempt paths', 'windhard-maintenance'), 'callback' => 'field_login_exempt_paths'),
@@ -159,6 +179,24 @@ class Windhard_Maintenance_Admin {
         $output['reason_preset'] = $reason_preset;
 
         $output['reason_custom'] = isset($input['reason_custom']) ? sanitize_text_field($input['reason_custom']) : '';
+
+        $output['headline_text'] = isset($input['headline_text']) ? sanitize_text_field($input['headline_text']) : '';
+        $raw_headline_color = isset($input['headline_color_text']) ? $input['headline_color_text'] : (isset($input['headline_color']) ? $input['headline_color'] : $defaults['headline_color']);
+        $output['headline_color'] = $this->sanitize_color($raw_headline_color, $defaults['headline_color']);
+        $headline_size = isset($input['headline_size']) ? sanitize_text_field($input['headline_size']) : $defaults['headline_size'];
+        if (!in_array($headline_size, $this->allowed_headline_sizes, true)) {
+            $headline_size = $defaults['headline_size'];
+        }
+        $output['headline_size'] = $headline_size;
+
+        $output['subhead_text'] = isset($input['subhead_text']) ? sanitize_text_field($input['subhead_text']) : '';
+        $raw_subhead_color = isset($input['subhead_color_text']) ? $input['subhead_color_text'] : (isset($input['subhead_color']) ? $input['subhead_color'] : $defaults['subhead_color']);
+        $output['subhead_color'] = $this->sanitize_color($raw_subhead_color, $defaults['subhead_color']);
+        $subhead_size = isset($input['subhead_size']) ? sanitize_text_field($input['subhead_size']) : $defaults['subhead_size'];
+        if (!in_array($subhead_size, $this->allowed_subhead_sizes, true)) {
+            $subhead_size = $defaults['subhead_size'];
+        }
+        $output['subhead_size'] = $subhead_size;
 
         $output['allow_roles'] = $this->sanitize_roles(isset($input['allow_roles']) ? (array) $input['allow_roles'] : array());
 
@@ -249,6 +287,22 @@ class Windhard_Maintenance_Admin {
     }
 
     /**
+     * Sanitize a hex color value.
+     *
+     * @param string $value        Raw value.
+     * @param string $default_hex  Default hex color.
+     * @return string
+     */
+    private function sanitize_color($value, $default_hex) {
+        $value = trim((string) $value);
+        if (preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $value)) {
+            return strtoupper($value);
+        }
+
+        return $default_hex;
+    }
+
+    /**
      * Explode lines from textarea value.
      *
      * @param string $value Input value.
@@ -299,6 +353,62 @@ class Windhard_Maintenance_Admin {
         $options = Windhard_Maintenance::get_options();
         ?>
         <input type="text" class="regular-text" name="windhard_maintenance_options[reason_custom]" value="<?php echo esc_attr($options['reason_custom']); ?>" />
+        <?php
+    }
+
+    public function field_headline_text() {
+        $options = Windhard_Maintenance::get_options();
+        ?>
+        <input type="text" class="regular-text" name="windhard_maintenance_options[headline_text]" value="<?php echo esc_attr($options['headline_text']); ?>" />
+        <p class="description"><?php esc_html_e('Leave blank to display the reason text.', 'windhard-maintenance'); ?></p>
+        <?php
+    }
+
+    public function field_headline_color() {
+        $options = Windhard_Maintenance::get_options();
+        ?>
+        <input type="text" name="windhard_maintenance_options[headline_color_text]" value="<?php echo esc_attr($options['headline_color']); ?>" class="regular-text" />
+        <input type="color" name="windhard_maintenance_options[headline_color]" value="<?php echo esc_attr($options['headline_color']); ?>" />
+        <p class="description"><?php esc_html_e('Hex color, e.g., #FFFFFF.', 'windhard-maintenance'); ?></p>
+        <?php
+    }
+
+    public function field_headline_size() {
+        $options = Windhard_Maintenance::get_options();
+        ?>
+        <select name="windhard_maintenance_options[headline_size]">
+            <?php foreach ($this->allowed_headline_sizes as $size) : ?>
+                <option value="<?php echo esc_attr($size); ?>" <?php selected($options['headline_size'], $size); ?>><?php echo esc_html(strtoupper($size)); ?></option>
+            <?php endforeach; ?>
+        </select>
+        <?php
+    }
+
+    public function field_subhead_text() {
+        $options = Windhard_Maintenance::get_options();
+        ?>
+        <input type="text" class="regular-text" name="windhard_maintenance_options[subhead_text]" value="<?php echo esc_attr($options['subhead_text']); ?>" />
+        <p class="description"><?php esc_html_e('Leave blank to hide the subhead.', 'windhard-maintenance'); ?></p>
+        <?php
+    }
+
+    public function field_subhead_color() {
+        $options = Windhard_Maintenance::get_options();
+        ?>
+        <input type="text" name="windhard_maintenance_options[subhead_color_text]" value="<?php echo esc_attr($options['subhead_color']); ?>" class="regular-text" />
+        <input type="color" name="windhard_maintenance_options[subhead_color]" value="<?php echo esc_attr($options['subhead_color']); ?>" />
+        <p class="description"><?php esc_html_e('Hex color, e.g., #FFFFFF.', 'windhard-maintenance'); ?></p>
+        <?php
+    }
+
+    public function field_subhead_size() {
+        $options = Windhard_Maintenance::get_options();
+        ?>
+        <select name="windhard_maintenance_options[subhead_size]">
+            <?php foreach ($this->allowed_subhead_sizes as $size) : ?>
+                <option value="<?php echo esc_attr($size); ?>" <?php selected($options['subhead_size'], $size); ?>><?php echo esc_html(strtoupper($size)); ?></option>
+            <?php endforeach; ?>
+        </select>
         <?php
     }
 

@@ -8,11 +8,52 @@ final class Wind_Warehouse_Portal {
     private const MAX_CODE_GENERATION_ATTEMPTS = 10;
     private const SHORTCODE = 'wind_warehouse_portal';
     private const PAGE_SLUG = 'warehouse';
-    private const TITLE = 'Wind Warehouse Portal';
+    private const TITLE = '仓库与防伪管理系统';
     private const HQ_DEALER_CODE = 'HQ';
 
     private static function portal_base_url(): string {
         return trailingslashit(home_url('index.php/' . self::PAGE_SLUG));
+    }
+
+    private static function glossary(string $key): string {
+        $map = [
+            'dashboard'      => __('仪表盘', 'wind-warehouse'),
+            'skus'           => __('SKU 管理', 'wind-warehouse'),
+            'dealers'        => __('经销商管理', 'wind-warehouse'),
+            'generate'       => __('生成防伪码', 'wind-warehouse'),
+            'ship'           => __('出库录入', 'wind-warehouse'),
+            'reset_b'        => __('清零 B', 'wind-warehouse'),
+            'monitor_hq'     => __('总部监控', 'wind-warehouse'),
+            'reports'        => __('报表导出', 'wind-warehouse'),
+            'add'            => __('添加', 'wind-warehouse'),
+            'enable'         => __('启用', 'wind-warehouse'),
+            'disable'        => __('停用', 'wind-warehouse'),
+            'status'         => __('状态', 'wind-warehouse'),
+            'created_at'     => __('创建时间', 'wind-warehouse'),
+            'updated_at'     => __('更新时间', 'wind-warehouse'),
+            'yes'            => __('是', 'wind-warehouse'),
+            'no'             => __('否', 'wind-warehouse'),
+            'business'       => __('营业执照', 'wind-warehouse'),
+            'authorization'  => __('授权书', 'wind-warehouse'),
+            'notes'          => __('备注', 'wind-warehouse'),
+            'quantity'       => __('数量', 'wind-warehouse'),
+            'batch'          => __('批次', 'wind-warehouse'),
+            'code'           => __('防伪码', 'wind-warehouse'),
+            'monitor'        => __('监控', 'wind-warehouse'),
+        ];
+
+        return $map[$key] ?? $key;
+    }
+
+    public static function display_status(string $raw): string {
+        $map = [
+            'active'    => __('启用', 'wind-warehouse'),
+            'disabled'  => __('停用', 'wind-warehouse'),
+            'in_stock'  => __('在库', 'wind-warehouse'),
+            'shipped'   => __('已出库', 'wind-warehouse'),
+        ];
+
+        return $map[$raw] ?? __('未知', 'wind-warehouse');
     }
 
     public static function register_shortcode(): void {
@@ -130,14 +171,14 @@ final class Wind_Warehouse_Portal {
 
     private static function nav_items(): array {
         return [
-            'dashboard'       => __('Dashboard', 'wind-warehouse'),
-            'skus'            => __('SKUs', 'wind-warehouse'),
-            'dealers'         => __('Dealers', 'wind-warehouse'),
-            'generate'        => __('Generate Codes', 'wind-warehouse'),
-            'ship'            => __('Ship Codes', 'wind-warehouse'),
-            'reset-b'         => __('Reset B', 'wind-warehouse'),
-            'monitor-hq'      => __('HQ Monitor', 'wind-warehouse'),
-            'reports'         => __('Reports', 'wind-warehouse'),
+            'dashboard'       => self::glossary('dashboard'),
+            'skus'            => self::glossary('skus'),
+            'dealers'         => self::glossary('dealers'),
+            'generate'        => self::glossary('generate'),
+            'ship'            => self::glossary('ship'),
+            'reset-b'         => self::glossary('reset_b'),
+            'monitor-hq'      => self::glossary('monitor_hq'),
+            'reports'         => self::glossary('reports'),
         ];
     }
 
@@ -208,7 +249,7 @@ final class Wind_Warehouse_Portal {
 
     private static function render_content(string $view_key, string $label, ?string $error_message = null): string {
         if ($view_key === 'dashboard') {
-            return '<p>' . esc_html__('Welcome to the warehouse portal. Select a module to continue.', 'wind-warehouse') . '</p>';
+            return '<p>' . esc_html__('欢迎使用仓库与防伪管理系统，请从左侧选择需要操作的功能。', 'wind-warehouse') . '</p>';
         }
 
         if ($view_key === 'skus') {
@@ -1710,11 +1751,11 @@ final class Wind_Warehouse_Portal {
         if (isset($_GET['msg'])) {
             $msg = sanitize_text_field(wp_unslash($_GET['msg']));
             if ($msg === 'enabled') {
-                $success_message = __('SKU enabled.', 'wind-warehouse');
+                $success_message = __('SKU 已启用。', 'wind-warehouse');
             } elseif ($msg === 'disabled') {
-                $success_message = __('SKU disabled.', 'wind-warehouse');
+                $success_message = __('SKU 已停用。', 'wind-warehouse');
             } elseif ($msg === 'created') {
-                $success_message = __('SKU created.', 'wind-warehouse');
+                $success_message = __('SKU 创建成功。', 'wind-warehouse');
             }
         }
 
@@ -1737,35 +1778,35 @@ final class Wind_Warehouse_Portal {
             $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
         }
         $html .= '<form method="post" action="' . esc_url($form_action) . '">';
-        $html .= '<h2>' . esc_html__('Add SKU', 'wind-warehouse') . '</h2>';
-        $html .= '<p><label>' . esc_html__('SKU Code', 'wind-warehouse') . '<br />';
+        $html .= '<h2>' . esc_html__('添加 SKU', 'wind-warehouse') . '</h2>';
+        $html .= '<p><label>' . esc_html__('SKU 编码', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="sku_code" required maxlength="13" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Name', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('产品名称', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="name" required maxlength="255" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Color (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('颜色（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="color" maxlength="50" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Size (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('尺码（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="size" maxlength="50" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Summary (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('摘要（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="summary" maxlength="255" /></label></p>';
         $html .= '<input type="hidden" name="action" value="ww_add_sku" />';
         $html .= wp_nonce_field('ww_skus_add', 'ww_nonce', true, false);
-        $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
+        $html .= '<p><button type="submit">' . esc_html(self::glossary('add')) . '</button></p>';
         $html .= '</form>';
 
-        $html .= '<h2>' . esc_html__('Latest SKUs', 'wind-warehouse') . '</h2>';
+        $html .= '<h2>' . esc_html__('最新 SKU 列表', 'wind-warehouse') . '</h2>';
         $html .= '<table class="ww-table">';
         $html .= '<thead><tr>';
         $html .= '<th>' . esc_html__('ID', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('SKU Code', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Name', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Color', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Size', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Summary', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Actions', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('SKU 编码', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('产品名称', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('颜色', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('尺码', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('摘要', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html(self::glossary('status')) . '</th>';
+        $html .= '<th>' . esc_html(self::glossary('created_at')) . '</th>';
+        $html .= '<th>' . esc_html(self::glossary('updated_at')) . '</th>';
+        $html .= '<th>' . esc_html__('操作', 'wind-warehouse') . '</th>';
         $html .= '</tr></thead>';
         $html .= '<tbody>';
 
@@ -1781,7 +1822,7 @@ final class Wind_Warehouse_Portal {
                 $summary_text = isset($sku['summary']) ? (string) $sku['summary'] : '';
                 $display_summary = $summary_text !== '' ? wp_html_excerpt($summary_text, 50, '…') : '';
                 $html .= '<td>' . esc_html($display_summary) . '</td>';
-                $html .= '<td>' . esc_html($sku['status']) . '</td>';
+                $html .= '<td>' . esc_html(self::display_status((string) ($sku['status'] ?? ''))) . '</td>';
                 $html .= '<td>' . esc_html($sku['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($sku['updated_at']) . '</td>';
                 $html .= '<td>';
@@ -1789,14 +1830,14 @@ final class Wind_Warehouse_Portal {
                 $html .= '<input type="hidden" name="ww_action" value="toggle_status" />';
                 $html .= '<input type="hidden" name="sku_id" value="' . esc_attr($sku['id']) . '" />';
                 $html .= wp_nonce_field('ww_skus_toggle_' . $sku['id'], 'ww_nonce', true, false);
-                $button_label = $sku['status'] === 'active' ? esc_html__('Disable', 'wind-warehouse') : esc_html__('Enable', 'wind-warehouse');
+                $button_label = $sku['status'] === 'active' ? esc_html(self::glossary('disable')) : esc_html(self::glossary('enable'));
                 $html .= '<button type="submit">' . $button_label . '</button>';
                 $html .= '</form>';
                 $html .= '</td>';
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="10">' . esc_html__('No SKUs found.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="10">' . esc_html__('暂无 SKU 记录。', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';
@@ -1814,11 +1855,11 @@ final class Wind_Warehouse_Portal {
         if (isset($_GET['msg'])) {
             $msg = sanitize_text_field(wp_unslash($_GET['msg']));
             if ($msg === 'enabled') {
-                $success_message = __('Dealer enabled.', 'wind-warehouse');
+                $success_message = __('经销商已启用。', 'wind-warehouse');
             } elseif ($msg === 'disabled') {
-                $success_message = __('Dealer disabled.', 'wind-warehouse');
+                $success_message = __('经销商已停用。', 'wind-warehouse');
             } elseif ($msg === 'created') {
-                $success_message = __('Dealer created.', 'wind-warehouse');
+                $success_message = __('经销商创建成功。', 'wind-warehouse');
             }
         }
 
@@ -1860,51 +1901,51 @@ final class Wind_Warehouse_Portal {
         }
         $html .= '<form method="post" action="' . esc_url($form_action) . '">';
         $html .= '<input type="hidden" name="action" value="ww_dealers_add" />';
-        $html .= '<h2>' . esc_html__('Add Dealer', 'wind-warehouse') . '</h2>';
-        $html .= '<p><label>' . esc_html__('Dealer Code', 'wind-warehouse') . '<br />';
+        $html .= '<h2>' . esc_html__('添加经销商', 'wind-warehouse') . '</h2>';
+        $html .= '<p><label>' . esc_html__('经销商编码', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="dealer_code" required /></label></p>';
-        $html .= '<p><label>' . esc_html__('Name', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('名称', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="name" required /></label></p>';
-        $html .= '<p><label>' . esc_html__('Phone (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('电话（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="phone" maxlength="50" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Contact Name (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('联系人（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="contact_name" maxlength="100" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Address (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('地址（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="address" maxlength="255" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Intro (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('备注（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="text" name="intro" maxlength="255" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Authorized From (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('授权开始（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="date" name="authorized_from" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Authorized To (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__('授权截止（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="date" name="authorized_to" /></label></p>';
-        $html .= '<p><label>' . esc_html__('Business License (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__(self::glossary('business') . '（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="hidden" name="business_license_attachment_id" id="ww_business_license_attachment_id" />';
-        $html .= '<button type="button" class="button" id="ww_business_license_button">' . esc_html__('Select / Upload', 'wind-warehouse') . '</button> ';
-        $html .= '<button type="button" class="button" id="ww_business_license_remove">' . esc_html__('Remove', 'wind-warehouse') . '</button>';
+        $html .= '<button type="button" class="button" id="ww_business_license_button">' . esc_html__('选择/上传', 'wind-warehouse') . '</button> ';
+        $html .= '<button type="button" class="button" id="ww_business_license_remove">' . esc_html__('移除', 'wind-warehouse') . '</button>';
         $html .= '<div id="ww_business_license_preview" class="ww-media-preview"></div></label></p>';
-        $html .= '<p><label>' . esc_html__('Authorization Letter (optional)', 'wind-warehouse') . '<br />';
+        $html .= '<p><label>' . esc_html__(self::glossary('authorization') . '（可选）', 'wind-warehouse') . '<br />';
         $html .= '<input type="hidden" name="authorization_letter_attachment_id" id="ww_authorization_letter_attachment_id" />';
-        $html .= '<button type="button" class="button" id="ww_authorization_letter_button">' . esc_html__('Select / Upload', 'wind-warehouse') . '</button> ';
-        $html .= '<button type="button" class="button" id="ww_authorization_letter_remove">' . esc_html__('Remove', 'wind-warehouse') . '</button>';
+        $html .= '<button type="button" class="button" id="ww_authorization_letter_button">' . esc_html__('选择/上传', 'wind-warehouse') . '</button> ';
+        $html .= '<button type="button" class="button" id="ww_authorization_letter_remove">' . esc_html__('移除', 'wind-warehouse') . '</button>';
         $html .= '<div id="ww_authorization_letter_preview" class="ww-media-preview"></div></label></p>';
         $html .= wp_nonce_field('ww_dealers_add', 'ww_nonce', true, false);
-        $html .= '<p><button type="submit">' . esc_html__('Add', 'wind-warehouse') . '</button></p>';
+        $html .= '<p><button type="submit">' . esc_html(self::glossary('add')) . '</button></p>';
         $html .= '</form>';
 
-        $html .= '<h2>' . esc_html__('Latest Dealers', 'wind-warehouse') . '</h2>';
+        $html .= '<h2>' . esc_html__('最新经销商列表', 'wind-warehouse') . '</h2>';
         $html .= '<table class="ww-table">';
         $html .= '<thead><tr>';
         $html .= '<th>' . esc_html__('ID', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Dealer Code', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Name', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Phone', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Authorized From', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Authorized To', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Available', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Status', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Created At', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Updated At', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Actions', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('经销商编码', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('名称', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('电话', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('授权开始', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('授权截止', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('当前有效', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html(self::glossary('status')) . '</th>';
+        $html .= '<th>' . esc_html(self::glossary('created_at')) . '</th>';
+        $html .= '<th>' . esc_html(self::glossary('updated_at')) . '</th>';
+        $html .= '<th>' . esc_html__('操作', 'wind-warehouse') . '</th>';
         $html .= '</tr></thead>';
         $html .= '<tbody>';
 
@@ -1918,13 +1959,13 @@ final class Wind_Warehouse_Portal {
                 $html .= '<td>' . esc_html($dealer['phone'] ?? '') . '</td>';
                 $html .= '<td>' . esc_html($dealer['authorized_from'] ?? '') . '</td>';
                 $html .= '<td>' . esc_html($dealer['authorized_to'] ?? '') . '</td>';
-                $html .= '<td>' . ($available ? esc_html__('Yes', 'wind-warehouse') : esc_html__('No', 'wind-warehouse')) . '</td>';
-                $html .= '<td>' . esc_html($dealer['status']) . '</td>';
+                $html .= '<td>' . ($available ? esc_html(self::glossary('yes')) : esc_html(self::glossary('no'))) . '</td>';
+                $html .= '<td>' . esc_html(self::display_status((string) ($dealer['status'] ?? ''))) . '</td>';
                 $html .= '<td>' . esc_html($dealer['created_at']) . '</td>';
                 $html .= '<td>' . esc_html($dealer['updated_at']) . '</td>';
 
                 $target_status = ($dealer['status'] === 'active') ? 'disabled' : 'active';
-                $button_label  = ($dealer['status'] === 'active') ? esc_html__('Disable', 'wind-warehouse') : esc_html__('Enable', 'wind-warehouse');
+                $button_label  = ($dealer['status'] === 'active') ? esc_html(self::glossary('disable')) : esc_html(self::glossary('enable'));
 
                 $html .= '<td>';
                 $html .= '<form method="post" action="' . esc_url($toggle_action) . '" style="display:inline">';
@@ -1939,7 +1980,7 @@ final class Wind_Warehouse_Portal {
                 $html .= '</tr>';
             }
         } else {
-            $html .= '<tr><td colspan="11">' . esc_html__('No dealers found.', 'wind-warehouse') . '</td></tr>';
+            $html .= '<tr><td colspan="11">' . esc_html__('暂无经销商记录。', 'wind-warehouse') . '</td></tr>';
         }
 
         $html .= '</tbody></table>';
@@ -3284,26 +3325,26 @@ final class Wind_Warehouse_Portal {
             . '.ww-monitor-hq .ww-monitor-note{margin:4px 0;color:#8a6d3b;}'
             . '.ww-monitor-hq .ww-monitor-actions{margin:8px 0;}'
             . '</style>';
-        $html .= '<h2>' . esc_html__('HQ Monitor', 'wind-warehouse') . '</h2>';
+        $html .= '<h2>' . esc_html__('总部监控', 'wind-warehouse') . '</h2>';
 
         $html .= '<form method="get" style="margin: 12px 0;">';
         $html .= '<input type="hidden" name="wh" value="monitor-hq" />';
-        $html .= '<label>' . esc_html__('Code', 'wind-warehouse') . ' <input type="text" name="code" value="' . esc_attr($filters['code_query']) . '" /></label> ';
-        $html .= '<label>' . esc_html__('Days', 'wind-warehouse') . ' <input type="number" min="1" max="365" name="days" value="' . esc_attr((string) $filters['days']) . '" /></label> ';
-        $html .= '<label>' . esc_html__('Date from', 'wind-warehouse') . ' <input type="date" name="date_from" value="' . esc_attr($filters['date_from_raw']) . '" /></label> ';
-        $html .= '<label>' . esc_html__('Date to', 'wind-warehouse') . ' <input type="date" name="date_to" value="' . esc_attr($filters['date_to_raw']) . '" /></label> ';
-        $html .= '<label>' . esc_html__('Per page', 'wind-warehouse') . ' <select name="per_page">';
+        $html .= '<label>' . esc_html__('防伪码', 'wind-warehouse') . ' <input type="text" name="code" value="' . esc_attr($filters['code_query']) . '" /></label> ';
+        $html .= '<label>' . esc_html__('最近天数', 'wind-warehouse') . ' <input type="number" min="1" max="365" name="days" value="' . esc_attr((string) $filters['days']) . '" /></label> ';
+        $html .= '<label>' . esc_html__('开始日期', 'wind-warehouse') . ' <input type="date" name="date_from" value="' . esc_attr($filters['date_from_raw']) . '" /></label> ';
+        $html .= '<label>' . esc_html__('结束日期', 'wind-warehouse') . ' <input type="date" name="date_to" value="' . esc_attr($filters['date_to_raw']) . '" /></label> ';
+        $html .= '<label>' . esc_html__('每页数量', 'wind-warehouse') . ' <select name="per_page">';
         foreach ([20, 50, 100] as $pp) {
             $selected = $pp === $filters['per_page'] ? ' selected' : '';
             $html    .= '<option value="' . esc_attr((string) $pp) . '"' . $selected . '>' . esc_html((string) $pp) . '</option>';
         }
         $html .= '</select></label> ';
-        $html .= '<label>' . esc_html__('B min', 'wind-warehouse') . ' <input type="number" min="0" max="99999" name="b_min" value="' . esc_attr((string) $filters['b_threshold']) . '" /></label> ';
-        $html .= '<button type="submit">' . esc_html__('Apply', 'wind-warehouse') . '</button> ';
+        $html .= '<label>' . esc_html__('B 下限', 'wind-warehouse') . ' <input type="number" min="0" max="99999" name="b_min" value="' . esc_attr((string) $filters['b_threshold']) . '" /></label> ';
+        $html .= '<button type="submit">' . esc_html__('应用筛选', 'wind-warehouse') . '</button> ';
         $html .= '</form>';
 
         $html .= '<div class="ww-monitor-meta">';
-        $html .= '<p class="ww-effective-range">' . esc_html__('Effective range', 'wind-warehouse') . ': ' . esc_html($filters['effective_start']) . ' ~ ' . esc_html($filters['effective_end']) . '</p>';
+        $html .= '<p class="ww-effective-range">' . esc_html__('有效时间范围', 'wind-warehouse') . ': ' . esc_html($filters['effective_start']) . ' ~ ' . esc_html($filters['effective_end']) . '</p>';
         if ($filters['date_from_raw'] !== '' && $filters['date_to_raw'] !== '') {
             $html .= '<p class="ww-monitor-note">' . esc_html__('已使用自定义日期范围，Days 已忽略。', 'wind-warehouse') . '</p>';
         }
@@ -3314,14 +3355,14 @@ final class Wind_Warehouse_Portal {
         $html .= self::render_monitor_export_form('high-b', $filters);
         $html .= '</div>';
 
-        $html .= '<h3>' . esc_html__('Unshipped consumer queries', 'wind-warehouse') . '</h3>';
-        $html .= '<p>' . esc_html(sprintf(__('Total: %d', 'wind-warehouse'), $total_events)) . '</p>';
+        $html .= '<h3>' . esc_html__('未出库消费者查询', 'wind-warehouse') . '</h3>';
+        $html .= '<p>' . esc_html(sprintf(__('总数：%d', 'wind-warehouse'), $total_events)) . '</p>';
         $html .= '<table class="ww-table"><thead><tr>';
-        $html .= '<th class="col-time">' . esc_html__('Time', 'wind-warehouse') . '</th>';
-        $html .= '<th class="col-code">' . esc_html__('Code', 'wind-warehouse') . '</th>';
+        $html .= '<th class="col-time">' . esc_html__('时间', 'wind-warehouse') . '</th>';
+        $html .= '<th class="col-code">' . esc_html__(self::glossary('code'), 'wind-warehouse') . '</th>';
         $html .= '<th>' . esc_html__('SKU', 'wind-warehouse') . '</th>';
-        $html .= '<th>' . esc_html__('Dealer', 'wind-warehouse') . '</th>';
-        $html .= '<th class="col-status">' . esc_html__('Status', 'wind-warehouse') . '</th>';
+        $html .= '<th>' . esc_html__('经销商', 'wind-warehouse') . '</th>';
+        $html .= '<th class="col-status">' . esc_html(self::glossary('status')) . '</th>';
         $html .= '<th class="col-ip">' . esc_html__('IP', 'wind-warehouse') . '</th>';
         $html .= '</tr></thead><tbody>';
 
@@ -3334,7 +3375,7 @@ final class Wind_Warehouse_Portal {
                 $html  .= '<td class="col-code">' . esc_html($r['code'] ?? '') . '</td>';
                 $html  .= '<td>' . esc_html($sku) . '</td>';
                 $html  .= '<td>' . esc_html($dealer) . '</td>';
-                $html  .= '<td class="col-status">' . esc_html((string) ($r['code_status'] ?? '')) . '</td>';
+                $html  .= '<td class="col-status">' . esc_html(Wind_Warehouse_Portal::display_status((string) ($r['code_status'] ?? ''))) . '</td>';
                 $html  .= '<td class="col-ip">' . esc_html($r['ip'] ?? '') . '</td>';
                 $html  .= '</tr>';
             }
@@ -3405,12 +3446,21 @@ final class Wind_Warehouse_Portal {
     }
 
     private static function render_user_info(WP_User $user): string {
-        $roles = !empty($user->roles) ? implode(', ', array_map('esc_html', $user->roles)) : __('(none)', 'wind-warehouse');
+        $role_objects = wp_roles();
+        $role_names = $role_objects instanceof WP_Roles ? $role_objects->get_names() : [];
+        $roles = [];
+        if (!empty($user->roles)) {
+            foreach ($user->roles as $slug) {
+                $display = $role_names[$slug] ?? $slug;
+                $roles[] = esc_html($display);
+            }
+        }
+        $roles_text = !empty($roles) ? implode(', ', $roles) : __('(none)', 'wind-warehouse');
         $login = esc_html($user->user_login);
 
         $html  = '<div class="ww-user-info">';
-        $html .= '<p>' . esc_html__('Current user:', 'wind-warehouse') . ' ' . $login . '</p>';
-        $html .= '<p>' . esc_html__('Roles:', 'wind-warehouse') . ' ' . $roles . '</p>';
+        $html .= '<p>' . esc_html__('当前用户：', 'wind-warehouse') . ' ' . $login . '</p>';
+        $html .= '<p>' . esc_html__('角色：', 'wind-warehouse') . ' ' . $roles_text . '</p>';
         $html .= '</div>';
 
         return $html;

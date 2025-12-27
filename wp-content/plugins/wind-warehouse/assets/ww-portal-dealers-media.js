@@ -7,7 +7,7 @@
                 var errorNotice = document.createElement('div');
                 errorNotice.className = 'notice notice-error';
                 var paragraph = document.createElement('p');
-                paragraph.textContent = 'Media library is unavailable. Please reload and ensure scripts are allowed to load.';
+                paragraph.textContent = '媒体库不可用，请刷新页面并确认脚本已允许加载。';
                 errorNotice.appendChild(paragraph);
                 container.insertBefore(errorNotice, container.firstChild);
             }
@@ -19,9 +19,9 @@
             buttonId: 'ww_business_license_button',
             removeButtonId: 'ww_business_license_remove',
             previewId: 'ww_business_license_preview',
-            title: 'Select Business License',
-            buttonText: 'Use this image',
-            previewAlt: 'Business License Preview'
+            title: '选择营业执照',
+            buttonText: '使用此图片',
+            previewAlt: '营业执照预览'
         });
 
         initMediaSelector({
@@ -29,9 +29,9 @@
             buttonId: 'ww_authorization_letter_button',
             removeButtonId: 'ww_authorization_letter_remove',
             previewId: 'ww_authorization_letter_preview',
-            title: 'Select Authorization Letter',
-            buttonText: 'Use this image',
-            previewAlt: 'Authorization Letter Preview'
+            title: '选择授权书',
+            buttonText: '使用此图片',
+            previewAlt: '授权书预览'
         });
     });
 

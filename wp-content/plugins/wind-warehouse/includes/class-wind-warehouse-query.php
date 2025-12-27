@@ -221,7 +221,7 @@ final class Wind_Warehouse_Query {
         $html .= '<p>' . esc_html__('产品名', 'wind-warehouse') . '：' . esc_html($row['sku_name'] ?? '') . '</p>';
         $html .= '<p>' . esc_html__('SKU', 'wind-warehouse') . '：' . esc_html($row['sku_code'] ?? '') . '</p>';
         $html .= '<p>' . esc_html__('防伪码', 'wind-warehouse') . '：' . esc_html($code) . '</p>';
-        $html .= '<p>' . esc_html__('状态', 'wind-warehouse') . '：' . esc_html($status) . '</p>';
+        $html .= '<p>' . esc_html__('状态', 'wind-warehouse') . '：' . esc_html(Wind_Warehouse_Portal::display_status($status)) . '</p>';
         if (!empty($shipped_at)) {
             $html .= '<p>' . esc_html__('出库时间', 'wind-warehouse') . '：' . esc_html($shipped_at) . '</p>';
         }

@@ -142,6 +142,39 @@ final class Wind_Warehouse_Plugin {
     }
 
     public static function enqueue_front_assets(): void {
+        global $post;
+
+        $is_plugin_page = false;
+        $shortcodes = ['wind_warehouse_portal', 'wind_warehouse_query', 'wind_warehouse_reports'];
+
+        if ($post instanceof WP_Post) {
+            foreach ($shortcodes as $shortcode) {
+                if (has_shortcode((string) $post->post_content, $shortcode)) {
+                    $is_plugin_page = true;
+                    break;
+                }
+            }
+        }
+
+        if (!$is_plugin_page) {
+            if (is_page('warehouse') || is_page('query') || is_page('verify')) {
+                $is_plugin_page = true;
+            }
+        }
+
+        if ($is_plugin_page) {
+            $style_path = plugin_dir_path(self::$plugin_file) . 'assets/ww-app.css';
+            if (file_exists($style_path)) {
+                wp_enqueue_style(
+                    'ww-app',
+                    plugin_dir_url(self::$plugin_file) . 'assets/ww-app.css',
+                    [],
+                    filemtime($style_path),
+                    'all'
+                );
+            }
+        }
+
         if (!is_user_logged_in()) {
             return;
         }

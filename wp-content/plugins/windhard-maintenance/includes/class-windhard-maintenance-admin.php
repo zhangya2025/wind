@@ -16,6 +16,34 @@ class Windhard_Maintenance_Admin {
     private $options = array();
 
     /**
+     * Option key.
+     *
+     * @var string
+     */
+    private $option_name = 'whm_settings';
+
+    /**
+     * Settings API group key.
+     *
+     * @var string
+     */
+    private $settings_group = 'whm_settings_group';
+
+    /**
+     * Settings page slug.
+     *
+     * @var string
+     */
+    private $page_slug = 'whm-settings';
+
+    /**
+     * Menu slug.
+     *
+     * @var string
+     */
+    private $menu_slug = 'whm-settings';
+
+    /**
      * Allowed values for presets.
      *
      * @var array
@@ -49,14 +77,49 @@ class Windhard_Maintenance_Admin {
      *
      * @var array
      */
-    private $allowed_headline_sizes = array('l', 'xl', 'xxl');
+    private $allowed_headline_sizes = array('m', 'l', 'xl', 'xxl');
 
     /**
      * Allowed subhead sizes.
      *
      * @var array
      */
-    private $allowed_subhead_sizes = array('s', 'm', 'l');
+    private $allowed_subhead_sizes = array('s', 'm', 'l', 'xl');
+
+    /**
+     * Get localized mode label.
+     *
+     * @param string $mode Mode key.
+     * @return string
+     */
+    private function get_mode_label($mode) {
+        $labels = array(
+            'maintenance' => __('维护中', 'windhard-maintenance'),
+            'disabled' => __('已禁用', 'windhard-maintenance'),
+        );
+
+        return isset($labels[$mode]) ? $labels[$mode] : $mode;
+    }
+
+    /**
+     * Get localized reason label.
+     *
+     * @param string $reason Reason key.
+     * @return string
+     */
+    private function get_reason_label($reason) {
+        $labels = array(
+            'routine' => __('例行维护', 'windhard-maintenance'),
+            'upgrade' => __('系统升级', 'windhard-maintenance'),
+            'emergency_fix' => __('紧急修复', 'windhard-maintenance'),
+            'migration' => __('数据迁移', 'windhard-maintenance'),
+            'third_party' => __('第三方服务故障', 'windhard-maintenance'),
+            'security' => __('安全加固', 'windhard-maintenance'),
+            'other' => __('其他', 'windhard-maintenance'),
+        );
+
+        return isset($labels[$reason]) ? $labels[$reason] : $reason;
+    }
 
     /**
      * Constructor.
@@ -80,10 +143,10 @@ class Windhard_Maintenance_Admin {
      */
     public function add_settings_page() {
         add_options_page(
-            __('Wind Maintenance', 'windhard-maintenance'),
-            __('Wind Maintenance', 'windhard-maintenance'),
+            __('维护设置', 'windhard-maintenance'),
+            __('维护模式', 'windhard-maintenance'),
             'manage_options',
-            'windhard-maintenance',
+            $this->menu_slug,
             array($this, 'render_page')
         );
     }
@@ -92,27 +155,27 @@ class Windhard_Maintenance_Admin {
      * Register settings and fields.
      */
     public function register_settings() {
-        register_setting('windhard_maintenance', 'windhard_maintenance_options', array($this, 'sanitize_options'));
+        register_setting($this->settings_group, $this->option_name, array($this, 'sanitize_options'));
 
         add_settings_section(
             'windhard_maintenance_section',
-            __('Maintenance Settings', 'windhard-maintenance'),
+            __('维护设置', 'windhard-maintenance'),
             '__return_false',
-            'windhard-maintenance'
+            $this->page_slug
         );
 
         $fields = array(
-            'enabled' => array('label' => __('Enable maintenance', 'windhard-maintenance'), 'callback' => 'field_enabled'),
-            'mode' => array('label' => __('Mode', 'windhard-maintenance'), 'callback' => 'field_mode'),
-            'reason_preset' => array('label' => __('Reason preset', 'windhard-maintenance'), 'callback' => 'field_reason_preset'),
-            'reason_custom' => array('label' => __('Custom reason', 'windhard-maintenance'), 'callback' => 'field_reason_custom'),
-            'headline_text' => array('label' => __('Headline text', 'windhard-maintenance'), 'callback' => 'field_headline_text'),
-            'headline_color' => array('label' => __('Headline color', 'windhard-maintenance'), 'callback' => 'field_headline_color'),
-            'headline_size' => array('label' => __('Headline size', 'windhard-maintenance'), 'callback' => 'field_headline_size'),
-            'subhead_text' => array('label' => __('Subhead text', 'windhard-maintenance'), 'callback' => 'field_subhead_text'),
-            'subhead_color' => array('label' => __('Subhead color', 'windhard-maintenance'), 'callback' => 'field_subhead_color'),
-            'subhead_size' => array('label' => __('Subhead size', 'windhard-maintenance'), 'callback' => 'field_subhead_size'),
-            'allow_roles' => array('label' => __('Allowed roles', 'windhard-maintenance'), 'callback' => 'field_allow_roles'),
+            'enabled' => array('label' => __('启用维护模式', 'windhard-maintenance'), 'callback' => 'field_enabled'),
+            'mode' => array('label' => __('模式', 'windhard-maintenance'), 'callback' => 'field_mode'),
+            'reason_preset' => array('label' => __('原因预设', 'windhard-maintenance'), 'callback' => 'field_reason_preset'),
+            'reason_custom' => array('label' => __('自定义原因', 'windhard-maintenance'), 'callback' => 'field_reason_custom'),
+            'headline_text' => array('label' => __('标题', 'windhard-maintenance'), 'callback' => 'field_headline_text'),
+            'headline_color' => array('label' => __('标题颜色', 'windhard-maintenance'), 'callback' => 'field_headline_color'),
+            'headline_size' => array('label' => __('标题字号', 'windhard-maintenance'), 'callback' => 'field_headline_size'),
+            'subhead_text' => array('label' => __('副标题', 'windhard-maintenance'), 'callback' => 'field_subhead_text'),
+            'subhead_color' => array('label' => __('副标题颜色', 'windhard-maintenance'), 'callback' => 'field_subhead_color'),
+            'subhead_size' => array('label' => __('副标题字号', 'windhard-maintenance'), 'callback' => 'field_subhead_size'),
+            'allow_roles' => array('label' => __('允许角色', 'windhard-maintenance'), 'callback' => 'field_allow_roles'),
             'ip_whitelist' => array('label' => __('IP whitelist', 'windhard-maintenance'), 'callback' => 'field_ip_whitelist'),
             'login_exempt_paths' => array('label' => __('Login exempt paths', 'windhard-maintenance'), 'callback' => 'field_login_exempt_paths'),
             'scope_mode' => array('label' => __('Scope mode', 'windhard-maintenance'), 'callback' => 'field_scope_mode'),
@@ -128,7 +191,7 @@ class Windhard_Maintenance_Admin {
                 $id,
                 $field['label'],
                 array($this, $field['callback']),
-                'windhard-maintenance',
+                $this->page_slug,
                 'windhard_maintenance_section'
             );
         }
@@ -138,17 +201,23 @@ class Windhard_Maintenance_Admin {
      * Render page.
      */
     public function render_page() {
-        $options = Windhard_Maintenance::get_options();
+        $this->options = Windhard_Maintenance::get_options();
         ?>
         <div class="wrap">
-            <h1><?php echo esc_html(__('Wind Maintenance', 'windhard-maintenance')); ?></h1>
+            <h1><?php echo esc_html(__('维护设置', 'windhard-maintenance')); ?></h1>
             <form method="post" action="options.php">
                 <?php
-                settings_fields('windhard_maintenance');
-                do_settings_sections('windhard-maintenance');
-                submit_button();
+                settings_fields($this->settings_group);
+                do_settings_sections($this->page_slug);
+                submit_button(__('保存设置', 'windhard-maintenance'));
                 ?>
             </form>
+            <?php
+            /*
+             * Testing note: 保存后刷新后台页面确认值已持久化，再在未登录窗口访问前台查看标题、颜色、角色豁免是否生效。
+             */
+            ?>
+            <p><strong>WHM_ADMIN_SETTINGS_BUILD=01</strong></p>
         </div>
         <?php
     }
@@ -181,8 +250,8 @@ class Windhard_Maintenance_Admin {
         $output['reason_custom'] = isset($input['reason_custom']) ? sanitize_text_field($input['reason_custom']) : '';
 
         $output['headline_text'] = isset($input['headline_text']) ? sanitize_text_field($input['headline_text']) : '';
-        $raw_headline_color = isset($input['headline_color_text']) ? $input['headline_color_text'] : (isset($input['headline_color']) ? $input['headline_color'] : $defaults['headline_color']);
-        $output['headline_color'] = $this->sanitize_color($raw_headline_color, $defaults['headline_color']);
+        $raw_headline_color = isset($input['headline_color']) ? $input['headline_color'] : $defaults['headline_color'];
+        $output['headline_color'] = sanitize_hex_color($raw_headline_color) ?: $defaults['headline_color'];
         $headline_size = isset($input['headline_size']) ? sanitize_text_field($input['headline_size']) : $defaults['headline_size'];
         if (!in_array($headline_size, $this->allowed_headline_sizes, true)) {
             $headline_size = $defaults['headline_size'];
@@ -190,8 +259,8 @@ class Windhard_Maintenance_Admin {
         $output['headline_size'] = $headline_size;
 
         $output['subhead_text'] = isset($input['subhead_text']) ? sanitize_text_field($input['subhead_text']) : '';
-        $raw_subhead_color = isset($input['subhead_color_text']) ? $input['subhead_color_text'] : (isset($input['subhead_color']) ? $input['subhead_color'] : $defaults['subhead_color']);
-        $output['subhead_color'] = $this->sanitize_color($raw_subhead_color, $defaults['subhead_color']);
+        $raw_subhead_color = isset($input['subhead_color']) ? $input['subhead_color'] : $defaults['subhead_color'];
+        $output['subhead_color'] = sanitize_hex_color($raw_subhead_color) ?: $defaults['subhead_color'];
         $subhead_size = isset($input['subhead_size']) ? sanitize_text_field($input['subhead_size']) : $defaults['subhead_size'];
         if (!in_array($subhead_size, $this->allowed_subhead_sizes, true)) {
             $subhead_size = $defaults['subhead_size'];
@@ -244,7 +313,7 @@ class Windhard_Maintenance_Admin {
             $wp_roles = wp_roles();
         }
         $valid_roles = array_keys($wp_roles->roles);
-        $roles = array_intersect($valid_roles, array_map('sanitize_text_field', $roles));
+        $roles = array_intersect($valid_roles, array_map('sanitize_key', $roles));
         if (empty($roles)) {
             $roles = array('administrator');
         }
@@ -287,22 +356,6 @@ class Windhard_Maintenance_Admin {
     }
 
     /**
-     * Sanitize a hex color value.
-     *
-     * @param string $value        Raw value.
-     * @param string $default_hex  Default hex color.
-     * @return string
-     */
-    private function sanitize_color($value, $default_hex) {
-        $value = trim((string) $value);
-        if (preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $value)) {
-            return strtoupper($value);
-        }
-
-        return $default_hex;
-    }
-
-    /**
      * Explode lines from textarea value.
      *
      * @param string $value Input value.
@@ -321,8 +374,8 @@ class Windhard_Maintenance_Admin {
         $options = Windhard_Maintenance::get_options();
         ?>
         <label>
-            <input type="checkbox" name="windhard_maintenance_options[enabled]" value="1" <?php checked(!empty($options['enabled'])); ?> />
-            <?php esc_html_e('Enable maintenance mode', 'windhard-maintenance'); ?>
+            <input type="checkbox" name="<?php echo esc_attr($this->option_name); ?>[enabled]" value="1" <?php checked(!empty($options['enabled'])); ?> />
+            <?php esc_html_e('启用维护模式', 'windhard-maintenance'); ?>
         </label>
         <?php
     }
@@ -330,9 +383,9 @@ class Windhard_Maintenance_Admin {
     public function field_mode() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <select name="windhard_maintenance_options[mode]">
+        <select name="<?php echo esc_attr($this->option_name); ?>[mode]">
             <?php foreach ($this->allowed_modes as $mode) : ?>
-                <option value="<?php echo esc_attr($mode); ?>" <?php selected($options['mode'], $mode); ?>><?php echo esc_html($mode); ?></option>
+                <option value="<?php echo esc_attr($mode); ?>" <?php selected($options['mode'], $mode); ?>><?php echo esc_html($this->get_mode_label($mode)); ?></option>
             <?php endforeach; ?>
         </select>
         <?php
@@ -341,9 +394,9 @@ class Windhard_Maintenance_Admin {
     public function field_reason_preset() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <select name="windhard_maintenance_options[reason_preset]">
+        <select name="<?php echo esc_attr($this->option_name); ?>[reason_preset]">
             <?php foreach ($this->allowed_reasons as $reason) : ?>
-                <option value="<?php echo esc_attr($reason); ?>" <?php selected($options['reason_preset'], $reason); ?>><?php echo esc_html($reason); ?></option>
+                <option value="<?php echo esc_attr($reason); ?>" <?php selected($options['reason_preset'], $reason); ?>><?php echo esc_html($this->get_reason_label($reason)); ?></option>
             <?php endforeach; ?>
         </select>
         <?php
@@ -352,31 +405,30 @@ class Windhard_Maintenance_Admin {
     public function field_reason_custom() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <input type="text" class="regular-text" name="windhard_maintenance_options[reason_custom]" value="<?php echo esc_attr($options['reason_custom']); ?>" />
+        <input type="text" class="regular-text" name="<?php echo esc_attr($this->option_name); ?>[reason_custom]" value="<?php echo esc_attr($options['reason_custom']); ?>" />
         <?php
     }
 
     public function field_headline_text() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <input type="text" class="regular-text" name="windhard_maintenance_options[headline_text]" value="<?php echo esc_attr($options['headline_text']); ?>" />
-        <p class="description"><?php esc_html_e('Leave blank to display the reason text.', 'windhard-maintenance'); ?></p>
+        <input type="text" class="regular-text" name="<?php echo esc_attr($this->option_name); ?>[headline_text]" value="<?php echo esc_attr($options['headline_text']); ?>" />
+        <p class="description"><?php esc_html_e('留空将显示原因文案', 'windhard-maintenance'); ?></p>
         <?php
     }
 
     public function field_headline_color() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <input type="text" name="windhard_maintenance_options[headline_color_text]" value="<?php echo esc_attr($options['headline_color']); ?>" class="regular-text" />
-        <input type="color" name="windhard_maintenance_options[headline_color]" value="<?php echo esc_attr($options['headline_color']); ?>" />
-        <p class="description"><?php esc_html_e('Hex color, e.g., #FFFFFF.', 'windhard-maintenance'); ?></p>
+        <input type="color" name="<?php echo esc_attr($this->option_name); ?>[headline_color]" value="<?php echo esc_attr($options['headline_color']); ?>" />
+        <p class="description"><?php esc_html_e('自定义标题颜色（16 进制）', 'windhard-maintenance'); ?></p>
         <?php
     }
 
     public function field_headline_size() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <select name="windhard_maintenance_options[headline_size]">
+        <select name="<?php echo esc_attr($this->option_name); ?>[headline_size]">
             <?php foreach ($this->allowed_headline_sizes as $size) : ?>
                 <option value="<?php echo esc_attr($size); ?>" <?php selected($options['headline_size'], $size); ?>><?php echo esc_html(strtoupper($size)); ?></option>
             <?php endforeach; ?>
@@ -387,24 +439,23 @@ class Windhard_Maintenance_Admin {
     public function field_subhead_text() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <input type="text" class="regular-text" name="windhard_maintenance_options[subhead_text]" value="<?php echo esc_attr($options['subhead_text']); ?>" />
-        <p class="description"><?php esc_html_e('Leave blank to hide the subhead.', 'windhard-maintenance'); ?></p>
+        <input type="text" class="regular-text" name="<?php echo esc_attr($this->option_name); ?>[subhead_text]" value="<?php echo esc_attr($options['subhead_text']); ?>" />
+        <p class="description"><?php esc_html_e('留空将不显示副标题', 'windhard-maintenance'); ?></p>
         <?php
     }
 
     public function field_subhead_color() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <input type="text" name="windhard_maintenance_options[subhead_color_text]" value="<?php echo esc_attr($options['subhead_color']); ?>" class="regular-text" />
-        <input type="color" name="windhard_maintenance_options[subhead_color]" value="<?php echo esc_attr($options['subhead_color']); ?>" />
-        <p class="description"><?php esc_html_e('Hex color, e.g., #FFFFFF.', 'windhard-maintenance'); ?></p>
+        <input type="color" name="<?php echo esc_attr($this->option_name); ?>[subhead_color]" value="<?php echo esc_attr($options['subhead_color']); ?>" />
+        <p class="description"><?php esc_html_e('自定义副标题颜色（16 进制）', 'windhard-maintenance'); ?></p>
         <?php
     }
 
     public function field_subhead_size() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <select name="windhard_maintenance_options[subhead_size]">
+        <select name="<?php echo esc_attr($this->option_name); ?>[subhead_size]">
             <?php foreach ($this->allowed_subhead_sizes as $size) : ?>
                 <option value="<?php echo esc_attr($size); ?>" <?php selected($options['subhead_size'], $size); ?>><?php echo esc_html(strtoupper($size)); ?></option>
             <?php endforeach; ?>
@@ -421,7 +472,7 @@ class Windhard_Maintenance_Admin {
         foreach ($wp_roles->roles as $role_key => $role) {
             ?>
             <label>
-                <input type="checkbox" name="windhard_maintenance_options[allow_roles][]" value="<?php echo esc_attr($role_key); ?>" <?php checked(in_array($role_key, (array) $options['allow_roles'], true)); ?> />
+                <input type="checkbox" name="<?php echo esc_attr($this->option_name); ?>[allow_roles][]" value="<?php echo esc_attr($role_key); ?>" <?php checked(in_array($role_key, (array) $options['allow_roles'], true)); ?> />
                 <?php echo esc_html($role['name']); ?>
             </label><br />
             <?php
@@ -431,7 +482,7 @@ class Windhard_Maintenance_Admin {
     public function field_ip_whitelist() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <textarea name="windhard_maintenance_options[ip_whitelist]" rows="5" cols="50"><?php echo esc_textarea($options['ip_whitelist']); ?></textarea>
+        <textarea name="<?php echo esc_attr($this->option_name); ?>[ip_whitelist]" rows="5" cols="50"><?php echo esc_textarea($options['ip_whitelist']); ?></textarea>
         <p class="description"><?php esc_html_e('One IP or CIDR per line.', 'windhard-maintenance'); ?></p>
         <?php
     }
@@ -439,7 +490,7 @@ class Windhard_Maintenance_Admin {
     public function field_login_exempt_paths() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <textarea name="windhard_maintenance_options[login_exempt_paths]" rows="3" cols="50"><?php echo esc_textarea($options['login_exempt_paths']); ?></textarea>
+        <textarea name="<?php echo esc_attr($this->option_name); ?>[login_exempt_paths]" rows="3" cols="50"><?php echo esc_textarea($options['login_exempt_paths']); ?></textarea>
         <p class="description"><?php esc_html_e('Paths always exempt from maintenance. Must include /windlogin.php.', 'windhard-maintenance'); ?></p>
         <?php
     }
@@ -447,7 +498,7 @@ class Windhard_Maintenance_Admin {
     public function field_scope_mode() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <select name="windhard_maintenance_options[scope_mode]">
+        <select name="<?php echo esc_attr($this->option_name); ?>[scope_mode]">
             <?php foreach ($this->allowed_scope_modes as $mode) : ?>
                 <option value="<?php echo esc_attr($mode); ?>" <?php selected($options['scope_mode'], $mode); ?>><?php echo esc_html($mode); ?></option>
             <?php endforeach; ?>
@@ -458,7 +509,7 @@ class Windhard_Maintenance_Admin {
     public function field_intercept_paths() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <textarea name="windhard_maintenance_options[intercept_paths]" rows="5" cols="50"><?php echo esc_textarea($options['intercept_paths']); ?></textarea>
+        <textarea name="<?php echo esc_attr($this->option_name); ?>[intercept_paths]" rows="5" cols="50"><?php echo esc_textarea($options['intercept_paths']); ?></textarea>
         <p class="description"><?php esc_html_e('Patterns to intercept (one per line, leading slash required).', 'windhard-maintenance'); ?></p>
         <?php
     }
@@ -466,7 +517,7 @@ class Windhard_Maintenance_Admin {
     public function field_allow_paths() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <textarea name="windhard_maintenance_options[allow_paths]" rows="5" cols="50"><?php echo esc_textarea($options['allow_paths']); ?></textarea>
+        <textarea name="<?php echo esc_attr($this->option_name); ?>[allow_paths]" rows="5" cols="50"><?php echo esc_textarea($options['allow_paths']); ?></textarea>
         <p class="description"><?php esc_html_e('Patterns to allow (one per line, leading slash required).', 'windhard-maintenance'); ?></p>
         <?php
     }
@@ -475,7 +526,7 @@ class Windhard_Maintenance_Admin {
         $options = Windhard_Maintenance::get_options();
         ?>
         <label>
-            <input type="checkbox" name="windhard_maintenance_options[send_503]" value="1" <?php checked(!empty($options['send_503'])); ?> />
+            <input type="checkbox" name="<?php echo esc_attr($this->option_name); ?>[send_503]" value="1" <?php checked(!empty($options['send_503'])); ?> />
             <?php esc_html_e('Send 503 status', 'windhard-maintenance'); ?>
         </label>
         <?php
@@ -484,7 +535,7 @@ class Windhard_Maintenance_Admin {
     public function field_retry_after() {
         $options = Windhard_Maintenance::get_options();
         ?>
-        <input type="number" name="windhard_maintenance_options[retry_after_minutes]" value="<?php echo esc_attr($options['retry_after_minutes']); ?>" min="0" />
+        <input type="number" name="<?php echo esc_attr($this->option_name); ?>[retry_after_minutes]" value="<?php echo esc_attr($options['retry_after_minutes']); ?>" min="0" />
         <p class="description"><?php esc_html_e('Optional. Leave empty to omit Retry-After.', 'windhard-maintenance'); ?></p>
         <?php
     }
@@ -493,7 +544,7 @@ class Windhard_Maintenance_Admin {
         $options = Windhard_Maintenance::get_options();
         ?>
         <label>
-            <input type="checkbox" name="windhard_maintenance_options[noindex]" value="1" <?php checked(!empty($options['noindex'])); ?> />
+            <input type="checkbox" name="<?php echo esc_attr($this->option_name); ?>[noindex]" value="1" <?php checked(!empty($options['noindex'])); ?> />
             <?php esc_html_e('Add noindex,nofollow meta', 'windhard-maintenance'); ?>
         </label>
         <?php

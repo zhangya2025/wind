@@ -51,12 +51,20 @@ class Windhard_Maintenance {
      */
     public static function get_options() {
         $defaults = self::get_default_options();
-        $saved = get_option('windhard_maintenance_options', array());
+        $saved = get_option('whm_settings', array());
         if (!is_array($saved)) {
             $saved = array();
         }
 
-        return array_merge($defaults, $saved);
+        // Legacy option compatibility to avoid losing previously stored settings.
+        if (empty($saved)) {
+            $legacy = get_option('windhard_maintenance_options', array());
+            if (is_array($legacy) && !empty($legacy)) {
+                $saved = $legacy;
+            }
+        }
+
+        return wp_parse_args($saved, $defaults);
     }
 
     /**

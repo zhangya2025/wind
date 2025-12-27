@@ -268,13 +268,12 @@ class Windhard_Maintenance_Guard {
      */
     private function send_headers($options) {
         if (!headers_sent()) {
-            if (!empty($options['send_503'])) {
-                status_header(503);
-                if ($options['retry_after_minutes'] !== null) {
-                    $seconds = intval($options['retry_after_minutes']) * 60;
-                    header('Retry-After: ' . $seconds);
-                }
+            status_header(503);
+            if ($options['retry_after_minutes'] !== null) {
+                $seconds = intval($options['retry_after_minutes']) * 60;
+                header('Retry-After: ' . $seconds);
             }
+            header('Content-Type: text/html; charset=UTF-8');
             header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
             header('Pragma: no-cache');
         }

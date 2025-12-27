@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Windhard Maintenance
  * Description: Maintenance mode guard with scope control.
- * Version: 1.0.0
+ * Version: PR-ROLLBACK-MINIMAL-01
  * Author: Windhard
  * Text Domain: windhard-maintenance
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WINDHARD_MAINTENANCE_VERSION', '1.0.0');
+define('WINDHARD_MAINTENANCE_VERSION', 'PR-ROLLBACK-MINIMAL-01');
 define('WINDHARD_MAINTENANCE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WINDHARD_MAINTENANCE_PLUGIN_URL', plugin_dir_url(__FILE__));
 require_once WINDHARD_MAINTENANCE_PLUGIN_DIR . 'includes/class-windhard-maintenance.php';

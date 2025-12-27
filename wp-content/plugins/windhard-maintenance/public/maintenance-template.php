@@ -7,11 +7,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-$site_title = get_bloginfo('name');
-if (!$site_title) {
-    $site_title = __('Site Maintenance', 'windhard-maintenance');
-}
-
+$headline = 'JUST FOR FANS';
+$subtitle = '网站调试中';
 $reason_text = isset($reason) ? $reason : '';
 ?>
 <!DOCTYPE html>
@@ -22,7 +19,7 @@ $reason_text = isset($reason) ? $reason : '';
         <meta name="robots" content="noindex,nofollow" />
     <?php endif; ?>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title><?php echo esc_html($site_title); ?></title>
+    <title><?php echo esc_html($headline); ?></title>
     <style>
         body {
             margin: 0;
@@ -52,9 +49,8 @@ $reason_text = isset($reason) ? $reason : '';
 </head>
 <body>
     <div class="whm-wrapper">
-        <h1><?php echo esc_html($site_title); ?></h1>
-        <p>网站维护中，请稍后访问。</p>
-        <p><?php echo esc_html__('Site is under maintenance. Please check back soon.', 'windhard-maintenance'); ?></p>
+        <h1><?php echo esc_html($headline); ?></h1>
+        <p><?php echo esc_html($subtitle); ?></p>
         <?php if (!empty($reason_text)) : ?>
             <p><?php echo esc_html($reason_text); ?></p>
         <?php endif; ?>

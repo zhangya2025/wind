@@ -3,7 +3,46 @@
     max-width: none;
     color: #1f2937;
     font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: var(--ww-font-base, 14px);
+    font-size: var(--ww-font-l3, 14px);
+    line-height: var(--ww-line-height, 1.4);
+}
+
+.ww-app h1 {
+    font-size: var(--ww-font-l1, 26px);
+}
+
+.ww-app h2,
+.ww-app .ww-section-title {
+    font-size: var(--ww-font-l2, 20px);
+}
+
+.ww-app,
+.ww-app label,
+.ww-app input,
+.ww-app select,
+.ww-app textarea,
+.ww-app button,
+.ww-app .button {
+    font-size: var(--ww-font-l3, 14px);
+}
+
+.ww-app .ww-help,
+.ww-app .description,
+.ww-app .ww-muted {
+    font-size: var(--ww-font-l4, 13px);
+    color: #6b7280;
+}
+
+.ww-app table,
+.ww-app th,
+.ww-app td {
+    font-size: var(--ww-font-l5, 13px);
+}
+
+.ww-app .ww-meta,
+.ww-app .ww-small {
+    font-size: var(--ww-font-l6, 12px);
+    color: #6b7280;
 }
 
 .ww-app .ww-shell {
@@ -39,8 +78,8 @@
 
 .ww-app .ww-card__title {
     margin: 0 0 8px;
-    font-size: 18px;
     color: #111827;
+    font-size: var(--ww-font-l2, 20px);
 }
 
 .ww-app .ww-card--nav .ww-card__title {
@@ -77,8 +116,8 @@
 
 .ww-app .ww-user-info {
     margin: 0;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: var(--ww-font-l3, 14px);
+    line-height: var(--ww-line-height, 1.4);
 }
 
 .ww-app .ww-table-wrap {
@@ -90,7 +129,6 @@
     width: 100%;
     border-collapse: collapse;
     min-width: 640px;
-    font-size: var(--ww-font-table, 13px);
 }
 
 .ww-app .ww-table th,
@@ -138,10 +176,6 @@
     gap: 6px;
 }
 
-.ww-app h1 {
-    font-size: var(--ww-font-h1, 26px);
-}
-
 .ww-app .ww-input,
 .ww-app input[type="text"],
 .ww-app input[type="number"],
@@ -151,7 +185,7 @@
     padding: 10px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: var(--ww-font-l3, 14px);
     width: 100%;
     box-sizing: border-box;
 }
@@ -165,7 +199,7 @@
     border-radius: 6px;
     padding: 10px 14px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--ww-font-l3, 14px);
     transition: background 0.2s ease;
 }
 
@@ -183,6 +217,39 @@
 .ww-app .ww-ship-summary-table,
 .ww-app .ww-ship-items-table {
     width: 100%;
+}
+
+.ww-app .ww-table-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin: 12px 0 16px;
+}
+
+.ww-app .ww-filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ww-app .ww-filter-item label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ww-app .ww-filter-item input[type="text"],
+.ww-app .ww-filter-item select {
+    min-width: 180px;
+}
+
+.ww-app .ww-filter-item--per-page select {
+    min-width: 120px;
+}
+
+.ww-app .ww-filter-item--actions {
+    align-self: flex-end;
 }
 
 .ww-app .ww-card--module-title {
@@ -207,5 +274,239 @@
 
     .ww-app .ww-table {
         min-width: 520px;
+    }
+}
+
+
+.ww-app .ww-reports .ww-report-filters {
+    margin: 12px 0 8px;
+}
+
+.ww-app .ww-reports .ww-reports-filters-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.ww-app .ww-reports .ww-reports-filters-row .ww-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ww-app .ww-reports .ww-reports-filters-row label {
+    font-size: 12px;
+}
+
+.ww-app .ww-reports .ww-reports-filters-row input[type="date"],
+.ww-app .ww-reports .ww-reports-filters-row select {
+    min-width: 160px;
+}
+
+.ww-app .ww-reports .ww-reports-filters-row--popovers .ww-field {
+    min-width: 200px;
+}
+
+.ww-app .ww-reports .ww-filter-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.ww-app .ww-reports .ww-filter-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.ww-app .ww-reports #ww-report-export {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 8px;
+}
+
+.ww-app .ww-reports .ww-filter-counts {
+    font-size: 12px;
+    color: #4b5563;
+}
+
+.ww-app .ww-reports .ww-effective {
+    margin: 8px 0;
+    font-style: italic;
+}
+
+.ww-app .ww-reports .ww-popover {
+    position: relative;
+}
+
+.ww-app .ww-reports .ww-popover-trigger {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+    min-width: 200px;
+    text-align: left;
+}
+
+.ww-app .ww-reports .ww-popover-trigger:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+}
+
+.ww-app .ww-reports .ww-popover-count {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.ww-app .ww-reports .ww-popover-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    width: 360px;
+    max-height: 260px;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 9999;
+    padding: 10px;
+}
+
+.ww-app .ww-reports .ww-popover-panel[hidden] {
+    display: none;
+}
+
+.ww-app .ww-reports .ww-ms {
+    border: 1px solid #d1d5db;
+    padding: 8px;
+    border-radius: 8px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ww-app .ww-reports .ww-ms .ww-ms-search {
+    width: 100%;
+    padding: 6px;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+}
+
+.ww-app .ww-reports .ww-ms .ww-ms-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ww-app .ww-reports .ww-ms .ww-ms-count {
+    margin-left: auto;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.ww-app .ww-reports .ww-ms .ww-ms-selected {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ww-app .ww-reports .ww-ms .ww-chip {
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 4px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ww-app .ww-reports .ww-ms .ww-chip button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.ww-app .ww-reports .ww-ms .ww-ms-results {
+    border: 1px solid #e5e7eb;
+    max-height: 200px;
+    overflow: auto;
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.ww-app .ww-reports .ww-ms .ww-option {
+    padding: 6px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.ww-app .ww-reports .ww-ms .ww-option.selected,
+.ww-app .ww-reports .ww-ms .ww-option:hover {
+    background: #eef5ff;
+}
+
+.ww-app--settings .ww-settings-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 2fr 1.2fr;
+    align-items: start;
+}
+
+.ww-app--settings .ww-page-title {
+    margin-bottom: 16px;
+}
+
+.ww-app--settings .ww-typography-preview {
+    display: grid;
+    gap: 12px;
+}
+
+.ww-app--settings .ww-typography-preview__block h1,
+.ww-app--settings .ww-typography-preview__block h2,
+.ww-app--settings .ww-typography-preview__block p {
+    margin: 0 0 8px;
+}
+
+.ww-app--settings .ww-typography-preview__form {
+    display: grid;
+    gap: 8px;
+}
+
+.ww-app--settings .ww-typography-preview__table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.ww-app--settings .ww-typography-preview__table th,
+.ww-app--settings .ww-typography-preview__table td {
+    border: 1px solid #e5e7eb;
+    padding: 8px;
+}
+
+.ww-app--settings .ww-typography-preview__table thead th {
+    background: #f3f4f6;
+}
+
+@media (max-width: 1024px) {
+    .ww-app--settings .ww-settings-grid {
+        grid-template-columns: 1fr;
     }
 }

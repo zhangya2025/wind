@@ -35,6 +35,7 @@
         var actionButtons = qsa(el, '[data-action]');
 
         var selectedMap = {};
+        var countTarget = el.getAttribute('data-count-target');
         uniqueIds(selectedIds, 500).forEach(function (id) {
             selectedMap[id] = true;
         });
@@ -42,6 +43,12 @@
         function updateCount() {
             if (countEl) {
                 countEl.textContent = 'Selected ' + Object.keys(selectedMap).length;
+            }
+            if (countTarget) {
+                var popoverCounts = document.querySelectorAll('[data-popover-count="' + countTarget + '"]');
+                Array.prototype.slice.call(popoverCounts).forEach(function (node) {
+                    node.textContent = 'Selected ' + Object.keys(selectedMap).length;
+                });
             }
         }
 

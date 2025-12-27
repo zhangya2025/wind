@@ -426,13 +426,15 @@ final class Wind_Warehouse_Portal {
         $html .= '<div class="ww-reports-filters-row ww-reports-filters-row--popovers">';
 
         $dealer_selected_count = count($filters['dealer_ids']);
+        $dealer_label          = esc_html__('经销商', 'wind-warehouse');
+        $dealer_count_text     = esc_html(sprintf('（已选%d）', $dealer_selected_count));
         $html .= '<div class="ww-field ww-popover" data-popover-key="dealers">';
         $html .= '<button type="button" class="ww-popover-trigger" data-popover="dealers">';
-        $html .= '<span class="ww-popover-label">' . esc_html__('Dealers', 'wind-warehouse') . '</span>';
-        $html .= '<span class="ww-popover-count" data-popover-count="dealers">' . esc_html(sprintf(__('Selected %d', 'wind-warehouse'), $dealer_selected_count)) . '</span>';
+        $html .= '<span class="ww-popover-label" data-popover-label="dealers">' . $dealer_label . '</span>';
+        $html .= '<span class="ww-popover-count" data-popover-count="dealers">' . $dealer_count_text . '</span>';
         $html .= '</button>';
         $html .= '<div class="ww-popover-panel" data-popover-panel="dealers" hidden>';
-        $html .= '<div class="ww-ms" data-type="dealers" data-name="dealer_ids[]" data-selected="' . esc_attr(implode(',', $filters['dealer_ids'])) . '" data-count-target="dealers">';
+        $html .= '<div class="ww-ms" data-type="dealers" data-name="dealer_ids[]" data-selected="' . esc_attr(implode(',', $filters['dealer_ids'])) . '" data-count-target="dealers" data-label="' . esc_attr($dealer_label) . '">';
         $html .= '<div class="ww-ms-actions"><strong>' . esc_html__('Dealers', 'wind-warehouse') . '</strong><button type="button" data-action="all">' . esc_html__('All', 'wind-warehouse') . '</button><button type="button" data-action="none">' . esc_html__('None', 'wind-warehouse') . '</button><span class="ww-ms-count"></span></div>';
         $html .= '<input class="ww-ms-search" type="text" placeholder="' . esc_attr__('Search dealers…', 'wind-warehouse') . '" />';
         $html .= '<div class="ww-ms-selected"></div>';
@@ -447,13 +449,15 @@ final class Wind_Warehouse_Portal {
         $html .= '</div>';
 
         $sku_selected_count = count($filters['sku_ids']);
+        $sku_label          = esc_html__('SKU', 'wind-warehouse');
+        $sku_count_text     = esc_html(sprintf('（已选%d）', $sku_selected_count));
         $html .= '<div class="ww-field ww-popover" data-popover-key="skus">';
         $html .= '<button type="button" class="ww-popover-trigger" data-popover="skus">';
-        $html .= '<span class="ww-popover-label">' . esc_html__('SKUs', 'wind-warehouse') . '</span>';
-        $html .= '<span class="ww-popover-count" data-popover-count="skus">' . esc_html(sprintf(__('Selected %d', 'wind-warehouse'), $sku_selected_count)) . '</span>';
+        $html .= '<span class="ww-popover-label" data-popover-label="skus">' . $sku_label . '</span>';
+        $html .= '<span class="ww-popover-count" data-popover-count="skus">' . $sku_count_text . '</span>';
         $html .= '</button>';
         $html .= '<div class="ww-popover-panel" data-popover-panel="skus" hidden>';
-        $html .= '<div class="ww-ms" data-type="skus" data-name="sku_ids[]" data-selected="' . esc_attr(implode(',', $filters['sku_ids'])) . '" data-count-target="skus">';
+        $html .= '<div class="ww-ms" data-type="skus" data-name="sku_ids[]" data-selected="' . esc_attr(implode(',', $filters['sku_ids'])) . '" data-count-target="skus" data-label="' . esc_attr($sku_label) . '">';
         $html .= '<div class="ww-ms-actions"><strong>' . esc_html__('SKUs', 'wind-warehouse') . '</strong><button type="button" data-action="all">' . esc_html__('All', 'wind-warehouse') . '</button><button type="button" data-action="none">' . esc_html__('None', 'wind-warehouse') . '</button><span class="ww-ms-count"></span></div>';
         $html .= '<input class="ww-ms-search" type="text" placeholder="' . esc_attr__('Search SKUs…', 'wind-warehouse') . '" />';
         $html .= '<div class="ww-ms-selected"></div>';

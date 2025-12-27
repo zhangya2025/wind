@@ -54,6 +54,7 @@ final class Wind_Warehouse_Plugin {
         add_action('admin_menu', [Wind_Warehouse_Settings::class, 'register_admin_menu']);
         add_action('admin_init', [Wind_Warehouse_Settings::class, 'register_settings']);
         add_action('admin_init', [self::class, 'maybe_redirect_from_admin']);
+        add_action('admin_enqueue_scripts', [self::class, 'enqueue_admin_assets']);
         add_action('wp_enqueue_scripts', [self::class, 'enqueue_front_assets']);
         add_filter('login_redirect', [self::class, 'filter_login_redirect'], 10, 3);
     }
@@ -143,6 +144,34 @@ final class Wind_Warehouse_Plugin {
         }
     }
 
+    public static function enqueue_admin_assets(string $hook): void {
+        $allowed = [
+            'toplevel_page_wind-warehouse',
+            'wind-warehouse_page_wind-warehouse-settings',
+            'wind-warehouse_page_wind-warehouse-typography',
+        ];
+
+        if (!in_array($hook, $allowed, true)) {
+            return;
+        }
+
+        $style_path = plugin_dir_path(self::$plugin_file) . 'assets/ww-app.css';
+        if (!file_exists($style_path)) {
+            return;
+        }
+
+        wp_enqueue_style(
+            'ww-app',
+            plugin_dir_url(self::$plugin_file) . 'assets/ww-app.css',
+            [],
+            filemtime($style_path),
+            'all'
+        );
+
+        $vars = Wind_Warehouse_Settings::build_css_vars();
+        wp_add_inline_style('ww-app', '.ww-app{' . $vars . ';}');
+    }
+
     public static function enqueue_front_assets(): void {
         global $post;
 
@@ -183,7 +212,7 @@ final class Wind_Warehouse_Plugin {
                 );
 
                 $vars = Wind_Warehouse_Settings::build_css_vars();
-                wp_add_inline_style('ww-app', '.ww-app{' . $vars . '}');
+                wp_add_inline_style('ww-app', '.ww-app{' . $vars . ';}');
             }
         }
 

@@ -2282,8 +2282,8 @@ final class Wind_Warehouse_Portal {
         $html .= $summary_html;
         $html .= '<form method="get" action="' . esc_url($filter_action) . '">';
         $html .= '<input type="hidden" name="wh" value="generate" />';
-        $html .= '<div class="ww-filters">';
-        $html .= '<p><label>' . esc_html__('SKU', 'wind-warehouse') . '<br />';
+        $html .= '<div class="ww-table-filters">';
+        $html .= '<div class="ww-filter-item"><label>' . esc_html__('SKU', 'wind-warehouse') . '<br />';
         $html .= '<select name="sku_id">';
         $html .= '<option value="">' . esc_html__('All', 'wind-warehouse') . '</option>';
         foreach ($skus as $sku) {
@@ -2291,15 +2291,15 @@ final class Wind_Warehouse_Portal {
             $selected = $filters['sku_id'] === (int) $sku['id'] ? ' selected' : '';
             $html .= '<option value="' . esc_attr($sku['id']) . '"' . $selected . '>' . esc_html($label) . '</option>';
         }
-        $html .= '</select></label></p>';
+        $html .= '</select></label></div>';
 
-        $html .= '<p><label>' . esc_html__('批次号', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="batch_no" value="' . esc_attr($filters['batch_no']) . '" /></label></p>';
+        $html .= '<div class="ww-filter-item"><label>' . esc_html__('批次号', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="batch_no" value="' . esc_attr($filters['batch_no']) . '" /></label></div>';
 
-        $html .= '<p><label>' . esc_html__('防伪码', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="code" value="' . esc_attr($filters['code']) . '" /></label></p>';
+        $html .= '<div class="ww-filter-item"><label>' . esc_html__('防伪码', 'wind-warehouse') . '<br />';
+        $html .= '<input type="text" name="code" value="' . esc_attr($filters['code']) . '" /></label></div>';
 
-        $html .= '<p><label>' . esc_html__('Status', 'wind-warehouse') . '<br />';
+        $html .= '<div class="ww-filter-item"><label>' . esc_html__('Status', 'wind-warehouse') . '<br />';
         $html .= '<select name="status">';
         $statuses = [
             'all'      => esc_html__('全部', 'wind-warehouse'),
@@ -2310,18 +2310,18 @@ final class Wind_Warehouse_Portal {
             $selected = $filters['status'] === $value ? ' selected' : '';
             $html .= '<option value="' . esc_attr($value) . '"' . $selected . '>' . esc_html($label) . '</option>';
         }
-        $html .= '</select></label></p>';
+        $html .= '</select></label></div>';
 
-        $html .= '<p><label>' . esc_html__('每页数量', 'wind-warehouse') . '<br />';
+        $html .= '<div class="ww-filter-item ww-filter-item--per-page"><label>' . esc_html__('每页数量', 'wind-warehouse') . '<br />';
         $per_page_options = [20, 50, 100];
         $html .= '<select name="per_page">';
         foreach ($per_page_options as $option) {
             $selected = $filters['per_page'] === $option ? ' selected' : '';
             $html .= '<option value="' . esc_attr($option) . '"' . $selected . '>' . esc_html($option) . '</option>';
         }
-        $html .= '</select></label></p>';
+        $html .= '</select></label></div>';
 
-        $html .= '<p><button type="submit" class="button">' . esc_html__('筛选', 'wind-warehouse') . '</button></p>';
+        $html .= '<div class="ww-filter-item ww-filter-item--actions"><button type="submit" class="button">' . esc_html__('筛选', 'wind-warehouse') . '</button></div>';
         $html .= '</div>';
         $html .= '</form>';
 

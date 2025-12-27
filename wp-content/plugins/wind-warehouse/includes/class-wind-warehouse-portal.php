@@ -427,10 +427,10 @@ final class Wind_Warehouse_Portal {
 
         $dealer_selected_count = count($filters['dealer_ids']);
         $dealer_label          = esc_html__('经销商', 'wind-warehouse');
-        $dealer_count_text     = esc_html(sprintf('（已选%d）', $dealer_selected_count));
-        $html .= '<div class="ww-field ww-popover" data-popover-key="dealers">';
+        $dealer_count_text     = esc_html(sprintf('%s（已选%d）', $dealer_label, $dealer_selected_count));
+        $html .= '<div class="ww-field ww-popover" data-popover-key="dealers" data-label="' . esc_attr($dealer_label) . '">';
         $html .= '<button type="button" class="ww-popover-trigger" data-popover="dealers">';
-        $html .= '<span class="ww-popover-label" data-popover-label="dealers">' . $dealer_label . '</span>';
+        $html .= '<span class="ww-popover-label" data-popover-label="dealers"></span>';
         $html .= '<span class="ww-popover-count" data-popover-count="dealers">' . $dealer_count_text . '</span>';
         $html .= '</button>';
         $html .= '<div class="ww-popover-panel" data-popover-panel="dealers" hidden>';
@@ -450,10 +450,10 @@ final class Wind_Warehouse_Portal {
 
         $sku_selected_count = count($filters['sku_ids']);
         $sku_label          = esc_html__('SKU', 'wind-warehouse');
-        $sku_count_text     = esc_html(sprintf('（已选%d）', $sku_selected_count));
-        $html .= '<div class="ww-field ww-popover" data-popover-key="skus">';
+        $sku_count_text     = esc_html(sprintf('%s（已选%d）', $sku_label, $sku_selected_count));
+        $html .= '<div class="ww-field ww-popover" data-popover-key="skus" data-label="' . esc_attr($sku_label) . '">';
         $html .= '<button type="button" class="ww-popover-trigger" data-popover="skus">';
-        $html .= '<span class="ww-popover-label" data-popover-label="skus">' . $sku_label . '</span>';
+        $html .= '<span class="ww-popover-label" data-popover-label="skus"></span>';
         $html .= '<span class="ww-popover-count" data-popover-count="skus">' . $sku_count_text . '</span>';
         $html .= '</button>';
         $html .= '<div class="ww-popover-panel" data-popover-panel="skus" hidden>';
@@ -487,7 +487,7 @@ final class Wind_Warehouse_Portal {
         $html .= '<div class="ww-filter-actions">';
         $html .= '<button type="submit" class="button button-primary">' . esc_html__('Apply', 'wind-warehouse') . '</button>';
         $html .= '<a class="button" href="' . esc_url($clear_url) . '">' . esc_html__('Clear filters', 'wind-warehouse') . '</a>';
-        $html .= '<span class="ww-filter-counts">' . esc_html__('Selected dealers', 'wind-warehouse') . ': ' . esc_html((string) $dealer_selected_count) . ' | ' . esc_html__('Selected SKUs', 'wind-warehouse') . ': ' . esc_html((string) $sku_selected_count) . '</span>';
+        $html .= '<span class="ww-filter-counts">' . esc_html(sprintf('%s已选：%d | %s已选：%d', $dealer_label, $dealer_selected_count, $sku_label, $sku_selected_count)) . '</span>';
         $html .= '</div>';
         $html .= '</div>';
         $html .= '</form>';

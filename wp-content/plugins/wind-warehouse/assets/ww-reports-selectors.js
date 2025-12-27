@@ -44,6 +44,7 @@
         function updateCount() {
             var currentCount = Object.keys(selectedMap).length;
             var countText = '（已选' + currentCount + '）';
+            var triggerText = countText;
 
             if (countEl) {
                 countEl.textContent = countText;
@@ -51,15 +52,15 @@
 
             if (countTarget) {
                 var popoverContainer = el.closest('.ww-popover');
-                var popoverLabel = popoverContainer ? qs(popoverContainer, '[data-popover-label]') : null;
+                var popoverLabel = popoverContainer ? (popoverContainer.getAttribute('data-label') || '') : '';
                 var popoverCounts = document.querySelectorAll('[data-popover-count="' + countTarget + '"]');
 
                 if (popoverLabel) {
-                    popoverLabel.textContent = baseLabel;
+                    triggerText = popoverLabel + countText;
                 }
 
                 Array.prototype.slice.call(popoverCounts).forEach(function (node) {
-                    node.textContent = baseLabel ? countText : String(currentCount);
+                    node.textContent = triggerText;
                 });
             }
         }

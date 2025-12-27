@@ -27,6 +27,7 @@
     function renderSelector(el, options, selectedIds, syncCallback) {
         var type = el.getAttribute('data-type');
         var inputName = el.getAttribute('data-name');
+        var baseLabel = el.getAttribute('data-label') || '';
         var searchInput = qs(el, '.ww-ms-search');
         var resultsEl = qs(el, '.ww-ms-results');
         var selectedEl = qs(el, '.ww-ms-selected');

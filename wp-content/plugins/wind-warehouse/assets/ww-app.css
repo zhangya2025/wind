@@ -3,7 +3,46 @@
     max-width: none;
     color: #1f2937;
     font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: var(--ww-font-base, 14px);
+    font-size: var(--ww-font-l3, 14px);
+    line-height: var(--ww-line-height, 1.4);
+}
+
+.ww-app h1 {
+    font-size: var(--ww-font-l1, 26px);
+}
+
+.ww-app h2,
+.ww-app .ww-section-title {
+    font-size: var(--ww-font-l2, 20px);
+}
+
+.ww-app,
+.ww-app label,
+.ww-app input,
+.ww-app select,
+.ww-app textarea,
+.ww-app button,
+.ww-app .button {
+    font-size: var(--ww-font-l3, 14px);
+}
+
+.ww-app .ww-help,
+.ww-app .description,
+.ww-app .ww-muted {
+    font-size: var(--ww-font-l4, 13px);
+    color: #6b7280;
+}
+
+.ww-app table,
+.ww-app th,
+.ww-app td {
+    font-size: var(--ww-font-l5, 13px);
+}
+
+.ww-app .ww-meta,
+.ww-app .ww-small {
+    font-size: var(--ww-font-l6, 12px);
+    color: #6b7280;
 }
 
 .ww-app .ww-shell {
@@ -39,8 +78,8 @@
 
 .ww-app .ww-card__title {
     margin: 0 0 8px;
-    font-size: 18px;
     color: #111827;
+    font-size: var(--ww-font-l2, 20px);
 }
 
 .ww-app .ww-card--nav .ww-card__title {
@@ -77,8 +116,8 @@
 
 .ww-app .ww-user-info {
     margin: 0;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: var(--ww-font-l3, 14px);
+    line-height: var(--ww-line-height, 1.4);
 }
 
 .ww-app .ww-table-wrap {
@@ -90,7 +129,6 @@
     width: 100%;
     border-collapse: collapse;
     min-width: 640px;
-    font-size: var(--ww-font-table, 13px);
 }
 
 .ww-app .ww-table th,
@@ -138,10 +176,6 @@
     gap: 6px;
 }
 
-.ww-app h1 {
-    font-size: var(--ww-font-h1, 26px);
-}
-
 .ww-app .ww-input,
 .ww-app input[type="text"],
 .ww-app input[type="number"],
@@ -151,7 +185,7 @@
     padding: 10px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: var(--ww-font-l3, 14px);
     width: 100%;
     box-sizing: border-box;
 }
@@ -165,7 +199,7 @@
     border-radius: 6px;
     padding: 10px 14px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--ww-font-l3, 14px);
     transition: background 0.2s ease;
 }
 
@@ -207,5 +241,53 @@
 
     .ww-app .ww-table {
         min-width: 520px;
+    }
+}
+
+.ww-app--settings .ww-settings-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 2fr 1.2fr;
+    align-items: start;
+}
+
+.ww-app--settings .ww-page-title {
+    margin-bottom: 16px;
+}
+
+.ww-app--settings .ww-typography-preview {
+    display: grid;
+    gap: 12px;
+}
+
+.ww-app--settings .ww-typography-preview__block h1,
+.ww-app--settings .ww-typography-preview__block h2,
+.ww-app--settings .ww-typography-preview__block p {
+    margin: 0 0 8px;
+}
+
+.ww-app--settings .ww-typography-preview__form {
+    display: grid;
+    gap: 8px;
+}
+
+.ww-app--settings .ww-typography-preview__table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.ww-app--settings .ww-typography-preview__table th,
+.ww-app--settings .ww-typography-preview__table td {
+    border: 1px solid #e5e7eb;
+    padding: 8px;
+}
+
+.ww-app--settings .ww-typography-preview__table thead th {
+    background: #f3f4f6;
+}
+
+@media (max-width: 1024px) {
+    .ww-app--settings .ww-settings-grid {
+        grid-template-columns: 1fr;
     }
 }

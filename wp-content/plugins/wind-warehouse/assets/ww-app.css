@@ -301,7 +301,12 @@
 
 .ww-app .ww-reports .ww-reports-filters-row input[type="date"],
 .ww-app .ww-reports .ww-reports-filters-row select {
-    min-width: 160px;
+    min-width: 140px;
+    width: auto;
+}
+
+.ww-app .ww-reports .ww-reports-filters-row select[name="per_page"] {
+    min-width: 96px;
 }
 
 .ww-app .ww-reports .ww-reports-filters-row--popovers .ww-field {
@@ -349,14 +354,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 100%;
+    width: auto;
     gap: 8px;
     padding: 8px 10px;
     border-radius: 6px;
     border: 1px solid #d1d5db;
     background: #fff;
     cursor: pointer;
-    min-width: 200px;
+    min-width: 160px;
     text-align: left;
 }
 
@@ -387,6 +392,20 @@
 
 .ww-app .ww-reports .ww-popover-panel[hidden] {
     display: none;
+}
+
+@media (min-width: 1024px) {
+    .ww-app .ww-reports .ww-reports-filters-row {
+        flex-wrap: nowrap;
+    }
+
+    .ww-app .ww-reports .ww-reports-filters-row--popovers .ww-field {
+        min-width: 0;
+    }
+
+    .ww-app .ww-reports .ww-popover-trigger {
+        min-width: 160px;
+    }
 }
 
 .ww-app .ww-reports .ww-ms {

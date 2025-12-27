@@ -8,7 +8,7 @@ final class Wind_Warehouse_Plugin {
 
     private const WAREHOUSE_ROLES = [
         'warehouse_staff' => [
-            'label' => 'Warehouse Staff',
+            'label' => '仓库员工',
             'caps'  => [
                 'wh_view_portal',
                 'wh_ship_codes',
@@ -17,7 +17,7 @@ final class Wind_Warehouse_Plugin {
             ],
         ],
         'warehouse_manager' => [
-            'label' => 'Warehouse Manager',
+            'label' => '仓库管理员',
             'caps'  => [
                 'wh_view_portal',
                 'wh_manage_skus',
@@ -31,7 +31,7 @@ final class Wind_Warehouse_Plugin {
             ],
         ],
         'dealer_user' => [
-            'label' => 'Dealer User',
+            'label' => '经销商用户',
             'caps'  => [
                 'wh_view_portal',
                 'wh_reset_consumer_count_dealer',

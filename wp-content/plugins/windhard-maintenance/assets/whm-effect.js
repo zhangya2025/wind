@@ -1,5 +1,5 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-07-17-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-07-17-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-07-18-01');
+window.__WHM_EFFECT_VERSION = 'PR-2024-07-18-01';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
@@ -40,9 +40,8 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const glAttributes = { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false };
-    const gl2 = canvas.getContext('webgl2', glAttributes);
-    const gl = gl2 || canvas.getContext('webgl', glAttributes) || canvas.getContext('experimental-webgl', glAttributes);
-    const isWebGL2 = !!gl2;
+    const gl = canvas.getContext('webgl2', glAttributes) || canvas.getContext('webgl', glAttributes) || canvas.getContext('experimental-webgl', glAttributes);
+    const isWebGL2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
 
     function resize() {
         const width = Math.floor(window.innerWidth * dpr);
@@ -73,7 +72,8 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         }
     }
 
-    console.log('[WHM] WEBGL2', isWebGL2, 'GLSL', gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
+    console.log('[WHM] WHM_GL_CONTEXT', isWebGL2 ? 'webgl2' : 'webgl1');
+    console.log('[WHM] WHM_GLSL', gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
 
     resize();
     window.addEventListener('resize', resize);
@@ -186,7 +186,7 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             float offset = t * 0.02 * scale;
             vec2 ridgeUv = vec2(uv.x * scale + offset, uv.y * 0.35);
             float h = ridge(ridgeUv) * height;
-            float eps = 0.002;
+            float eps = max(1.0 / max(u_resolution.x, 1.0), 1.0 / max(u_resolution.y, 1.0));
             float hx = ridge(ridgeUv + vec2(eps, 0.0)) * height;
             float hy = ridge(ridgeUv + vec2(0.0, eps)) * height;
             float base = 0.15 + height * 0.5;
@@ -268,7 +268,9 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         program = createProgram(vertexSrc, fragmentSrc);
     } catch (err) {
         console.error(err);
-        showError('EFFECT INIT FAILED');
+        if (!window.__WHM_SHADER_FAIL) {
+            showError('EFFECT INIT FAILED');
+        }
         fallback2D();
         return;
     }

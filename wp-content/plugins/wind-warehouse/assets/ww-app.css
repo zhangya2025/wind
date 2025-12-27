@@ -1,0 +1,211 @@
+.ww-app {
+    width: 100%;
+    max-width: none;
+    color: #1f2937;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: var(--ww-font-base, 14px);
+}
+
+.ww-app .ww-shell {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.ww-app .ww-sidebar {
+    flex: 0 0 240px;
+    position: sticky;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ww-app .ww-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ww-app .ww-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    padding: 16px;
+}
+
+.ww-app .ww-card__title {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: #111827;
+}
+
+.ww-app .ww-card--nav .ww-card__title {
+    margin-bottom: 12px;
+}
+
+.ww-app .ww-nav__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ww-app .ww-nav__list li a {
+    display: block;
+    padding: 10px 12px;
+    border-radius: 6px;
+    color: #111827;
+    text-decoration: none;
+    background: #f3f4f6;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.ww-app .ww-nav__list li.active a {
+    background: #2563eb;
+    color: #fff;
+}
+
+.ww-app .ww-nav__list li a:hover {
+    background: #e5e7eb;
+}
+
+.ww-app .ww-user-info {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.ww-app .ww-table-wrap {
+    overflow: auto;
+    max-width: 100%;
+}
+
+.ww-app .ww-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+    font-size: var(--ww-font-table, 13px);
+}
+
+.ww-app .ww-table th,
+.ww-app .ww-table td,
+.ww-app .ww-ship-table th,
+.ww-app .ww-ship-table td,
+.ww-app .ww-ship-summary-table th,
+.ww-app .ww-ship-summary-table td,
+.ww-app .ww-ship-items-table th,
+.ww-app .ww-ship-items-table td {
+    padding: 10px;
+    border: 1px solid #e5e7eb;
+    text-align: left;
+    vertical-align: top;
+    background: #fff;
+}
+
+.ww-app .ww-table thead th,
+.ww-app .ww-ship-table thead th,
+.ww-app .ww-ship-summary-table thead th,
+.ww-app .ww-ship-items-table thead th {
+    background: #f3f4f6;
+    font-weight: 600;
+}
+
+.ww-app .ww-table tbody tr:nth-child(odd) td,
+.ww-app .ww-ship-table tbody tr:nth-child(odd) td,
+.ww-app .ww-ship-summary-table tbody tr:nth-child(odd) td,
+.ww-app .ww-ship-items-table tbody tr:nth-child(odd) td {
+    background: #fafafa;
+}
+
+.ww-app .ww-form,
+.ww-app form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.ww-app label {
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ww-app h1 {
+    font-size: var(--ww-font-h1, 26px);
+}
+
+.ww-app .ww-input,
+.ww-app input[type="text"],
+.ww-app input[type="number"],
+.ww-app input[type="date"],
+.ww-app select,
+.ww-app textarea {
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ww-app .ww-btn,
+.ww-app button,
+.ww-app .button {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s ease;
+}
+
+.ww-app .ww-btn:hover,
+.ww-app button:hover,
+.ww-app .button:hover {
+    background: #1d4ed8;
+}
+
+.ww-app .button.button-primary {
+    background: #2563eb;
+}
+
+.ww-app .ww-ship-table-wrapper,
+.ww-app .ww-ship-summary-table,
+.ww-app .ww-ship-items-table {
+    width: 100%;
+}
+
+.ww-app .ww-card--module-title {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+@media (max-width: 960px) {
+    .ww-app .ww-shell {
+        flex-direction: column;
+    }
+
+    .ww-app .ww-sidebar {
+        position: relative;
+        width: 100%;
+    }
+
+    .ww-app .ww-nav__list li a {
+        background: #f9fafb;
+    }
+
+    .ww-app .ww-table {
+        min-width: 520px;
+    }
+}

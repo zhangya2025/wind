@@ -51,6 +51,8 @@ final class Wind_Warehouse_Plugin {
         add_action('init', [self::class, 'register_shortcodes']);
         add_action('admin_init', [self::class, 'maybe_ensure_portal_page']);
         add_action('admin_init', [self::class, 'maybe_ensure_query_page']);
+        add_action('admin_menu', [Wind_Warehouse_Settings::class, 'register_admin_menu']);
+        add_action('admin_init', [Wind_Warehouse_Settings::class, 'register_settings']);
         add_action('admin_init', [self::class, 'maybe_redirect_from_admin']);
         add_action('wp_enqueue_scripts', [self::class, 'enqueue_front_assets']);
         add_filter('login_redirect', [self::class, 'filter_login_redirect'], 10, 3);
@@ -142,6 +144,62 @@ final class Wind_Warehouse_Plugin {
     }
 
     public static function enqueue_front_assets(): void {
+        global $post;
+
+        $is_plugin_page  = false;
+        $is_portal_page  = false;
+        $shortcodes      = ['wind_warehouse_portal', 'wind_warehouse_query', 'wind_warehouse_reports'];
+
+        if ($post instanceof WP_Post) {
+            foreach ($shortcodes as $shortcode) {
+                if (has_shortcode((string) $post->post_content, $shortcode)) {
+                    $is_plugin_page = true;
+                    if ($shortcode === 'wind_warehouse_portal') {
+                        $is_portal_page = true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!$is_plugin_page) {
+            if (is_page('warehouse') || is_page('query') || is_page('verify')) {
+                $is_plugin_page = true;
+                if (is_page('warehouse')) {
+                    $is_portal_page = true;
+                }
+            }
+        }
+
+        if ($is_plugin_page) {
+            $style_path = plugin_dir_path(self::$plugin_file) . 'assets/ww-app.css';
+            if (file_exists($style_path)) {
+                wp_enqueue_style(
+                    'ww-app',
+                    plugin_dir_url(self::$plugin_file) . 'assets/ww-app.css',
+                    [],
+                    filemtime($style_path),
+                    'all'
+                );
+
+                $vars = Wind_Warehouse_Settings::build_css_vars();
+                wp_add_inline_style('ww-app', '.ww-app{' . $vars . '}');
+            }
+        }
+
+        if ($is_portal_page) {
+            $script_path = plugin_dir_path(self::$plugin_file) . 'assets/ww-sku-filter.js';
+            if (file_exists($script_path)) {
+                wp_enqueue_script(
+                    'ww-sku-filter',
+                    plugin_dir_url(self::$plugin_file) . 'assets/ww-sku-filter.js',
+                    [],
+                    filemtime($script_path),
+                    true
+                );
+            }
+        }
+
         if (!is_user_logged_in()) {
             return;
         }
@@ -164,7 +222,7 @@ final class Wind_Warehouse_Plugin {
             return;
         }
 
-        if (!current_user_can('wh_manage_dealers')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_manage_dealers')) {
             return;
         }
 

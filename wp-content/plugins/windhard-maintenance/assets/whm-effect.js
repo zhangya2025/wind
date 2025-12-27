@@ -1,9 +1,9 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-07-18-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-07-18-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-07-19-02');
+window.__WHM_EFFECT_VERSION = 'PR-2024-07-19-02';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
-    const canvas = document.getElementById('whm-effect');
+    let canvas = document.getElementById('whm-effect');
     const loading = document.getElementById('whm-loading');
     const errorNode = document.getElementById('whm-effect-error');
     const watermark = document.getElementById('whm-effect-watermark');
@@ -63,15 +63,6 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         return;
     }
 
-    if (!isWebGL2) {
-        const deriv = gl.getExtension('OES_standard_derivatives');
-        if (!deriv) {
-            showError('EFFECT INIT FAILED', 'MISSING_EXT: OES_standard_derivatives');
-            fallback2D();
-            return;
-        }
-    }
-
     console.log('[WHM] WHM_GL_CONTEXT', isWebGL2 ? 'webgl2' : 'webgl1');
     console.log('[WHM] WHM_GLSL', gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
 
@@ -119,31 +110,28 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         return program;
     }
 
-    const vertexSrc = isWebGL2 ? `
-        #version 300 es
-        in vec2 a_position;
-        out vec2 v_uv;
-        void main() {
-            v_uv = a_position * 0.5 + 0.5;
-            gl_Position = vec4(a_position, 0.0, 1.0);
-        }
-    ` : `
-        attribute vec2 a_position;
-        varying vec2 v_uv;
-        void main() {
-            v_uv = a_position * 0.5 + 0.5;
-            gl_Position = vec4(a_position, 0.0, 1.0);
-        }
-    `;
+    const vertexSrc = isWebGL2
+        ? "#version 300 es\n" +
+          "in vec2 a_position;\n" +
+          "out vec2 v_uv;\n" +
+          "void main() {\n" +
+          "    v_uv = a_position * 0.5 + 0.5;\n" +
+          "    gl_Position = vec4(a_position, 0.0, 1.0);\n" +
+          "}\n"
+        : "attribute vec2 a_position;\n" +
+          "varying vec2 v_uv;\n" +
+          "void main() {\n" +
+          "    v_uv = a_position * 0.5 + 0.5;\n" +
+          "    gl_Position = vec4(a_position, 0.0, 1.0);\n" +
+          "}\n";
 
-    const fragmentHeader = isWebGL2 ? `#version 300 es
-        precision highp float;
-        in vec2 v_uv;
-        out vec4 outColor;
-    ` : `#extension GL_OES_standard_derivatives : enable
-        precision highp float;
-        varying vec2 v_uv;
-    `;
+    const fragmentHeader = isWebGL2
+        ? "#version 300 es\n" +
+          "precision highp float;\n" +
+          "in vec2 v_uv;\n" +
+          "out vec4 outColor;\n"
+        : "precision highp float;\n" +
+          "varying vec2 v_uv;\n";
 
     const fragmentBody = `
         uniform vec2 u_resolution;
@@ -318,18 +306,32 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
     }
 
     function fallback2D() {
+        window.removeEventListener('resize', resize);
+        running = false;
         if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+        let targetCanvas = canvas;
+        if (gl) {
+            const replacement = canvas.cloneNode(false);
+            replacement.id = canvas.id;
+            const parent = canvas.parentNode;
+            if (parent) {
+                parent.replaceChild(replacement, canvas);
+            }
+            targetCanvas = replacement;
+            canvas = replacement;
+        }
+
+        const ctx = targetCanvas.getContext('2d');
         if (!ctx) return;
-        let w = canvas.width;
-        let h = canvas.height;
+        let w = targetCanvas.width;
+        let h = targetCanvas.height;
         function resize2d() {
             w = Math.floor(window.innerWidth * dpr);
             h = Math.floor(window.innerHeight * dpr);
-            canvas.width = w;
-            canvas.height = h;
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
+            targetCanvas.width = w;
+            targetCanvas.height = h;
+            targetCanvas.style.width = '100%';
+            targetCanvas.style.height = '100%';
         }
         resize2d();
         window.addEventListener('resize', resize2d);

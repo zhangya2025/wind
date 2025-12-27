@@ -1,5 +1,5 @@
-console.log('WHM_EFFECT_VERSION=PR-2024-07-20-01');
-window.__WHM_EFFECT_VERSION = 'PR-2024-07-20-01';
+console.log('WHM_EFFECT_VERSION=PR-2024-07-20-02');
+window.__WHM_EFFECT_VERSION = 'PR-2024-07-20-02';
 window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
 
 (function() {
@@ -166,38 +166,45 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             return v;
         }
 
-        float heightfield(float x, float t, float scale, float amp) {
-            float warp = fbm(vec2(x * scale * 0.2 + t * 0.03, t * 0.05)) * 0.15;
-            float h = fbm(vec2(x * scale + warp, 0.0) + vec2(t * 0.05, 0.0));
+        float ridgeHeight(float x, float t, float scale, float amp, float ridgePower) {
+            float warp = fbm(vec2(x * scale * 0.15 + t * 0.05, t * 0.03)) * 0.2;
+            float h = fbm(vec2(x * scale + warp, 0.0) + vec2(t * 0.04, 0.0));
+            h = pow(h, ridgePower);
             return h * amp;
         }
 
-        vec3 mountainColor(float h, float fog, float contrast) {
-            vec3 rock = vec3(0.28, 0.33, 0.40) * contrast;
-            vec3 snow = vec3(0.9, 0.93, 0.97);
-            float snowMask = smoothstep(0.25, 0.65, h);
-            vec3 col = mix(rock, snow, snowMask);
-            return mix(col, vec3(0.93, 0.95, 0.97), fog);
+        float slopeDiff(float x, float t, float scale, float amp, float ridgePower, float eps) {
+            float h1 = ridgeHeight(x + eps, t, scale, amp, ridgePower);
+            float h0 = ridgeHeight(x - eps, t, scale, amp, ridgePower);
+            return abs(h1 - h0) / (2.0 * eps + 1e-5);
         }
 
-        float flake(vec2 uv, float size, float softness) {
-            float d = length(uv);
+        vec3 mountainColor(float h, float fog, float contrast, float slope) {
+            vec3 rock = vec3(0.25, 0.32, 0.40) * contrast;
+            vec3 snow = vec3(0.92, 0.95, 0.98);
+            float snowMask = smoothstep(0.22, 0.65, h - slope * 0.08);
+            vec3 col = mix(rock, snow, snowMask);
+            vec3 shadow = vec3(0.16, 0.20, 0.26);
+            col = mix(col, shadow, clamp(slope * 0.7, 0.0, 0.45));
+            return mix(col, vec3(0.94, 0.96, 0.98), fog);
+        }
+
+        float flakeDot(vec2 offset, float size, float softness) {
+            float d = length(offset);
             return exp(-pow(d / size, 2.0) * softness);
         }
 
-        float snowLayer(vec2 uv, float t, float density, float speed, float wind, float size, float softness, float swing, vec2 quietCenter, float quietRadius) {
-            vec2 p = uv;
-            p.x += sin(p.y * 6.2831 + t * 0.5) * swing;
-            p.y += t * speed;
-            p.x += t * wind;
-            p *= density;
+        float snowLayer(vec2 uv, float t, float density, float speed, float wind, float size, float softness, float driftSwing, vec2 quietCenter, float quietRadius) {
+            vec2 drift = vec2(wind * t + sin(t * 0.5) * 0.02, speed * t);
+            vec2 p = uv * density + drift;
             vec2 id = floor(p);
             vec2 f = fract(p) - 0.5;
             vec2 jitter = vec2(hash(id + 0.17), hash(id + 2.83)) - 0.5;
-            vec2 drop = f + jitter * 0.65;
-            float base = flake(drop, size, softness);
-            float quiet = 1.0 - smoothstep(quietRadius * 0.6, quietRadius, distance(uv, quietCenter));
-            return base * (1.0 - quiet * 0.75);
+            vec2 center = f + jitter * 0.7;
+            center.x += sin(t + dot(id, vec2(0.7, 1.3))) * driftSwing;
+            float base = flakeDot(center, size, softness);
+            float quiet = smoothstep(quietRadius * 0.35, quietRadius, distance(uv, quietCenter));
+            return base * (0.35 + 0.65 * quiet);
         }
 
         void main() {
@@ -208,65 +215,56 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             float t = u_time * mix(1.0, 0.5, u_reduce);
 
             vec3 skyTop = vec3(0.09, 0.13, 0.20);
-            vec3 skyHorizon = vec3(0.78, 0.84, 0.90);
-            float horizon = smoothstep(-0.2, 0.7, uv.y);
+            vec3 skyHorizon = vec3(0.82, 0.87, 0.92);
+            float horizon = smoothstep(-0.15, 0.75, uv.y);
             vec3 sky = mix(skyHorizon, skyTop, horizon);
 
             vec3 col = sky;
             vec2 quietCenter = vec2(0.5, 0.55);
-            float quietRadius = 0.25;
+            float quietRadius = 0.23;
 
+            float eps = 1.0 / max(u_resolution.x, 1.0);
             float fogCurve = smoothstep(0.25, 0.95, uv.y);
-            float layers[4];
-            layers[0] = heightfield(uv.x * 1.4 - 0.2, t * 0.25, 1.2, 0.35);
-            layers[1] = heightfield(uv.x * 1.8 + 0.1, t * 0.32, 1.6, 0.42);
-            layers[2] = heightfield(uv.x * 2.2 - 0.15, t * 0.4, 2.3, 0.5);
-            layers[3] = heightfield(uv.x * 2.8 + 0.05, t * 0.55, 3.1, 0.6);
 
+            float scales[4];
+            float amps[4];
             float bases[4];
-            bases[0] = 0.28;
-            bases[1] = 0.32;
-            bases[2] = 0.36;
-            bases[3] = 0.40;
+            float ridgeP[4];
+            float layerFog[4];
+            float contrast[4];
 
-            float fogs[4];
-            fogs[0] = fogCurve * 0.75;
-            fogs[1] = fogCurve * 0.6;
-            fogs[2] = fogCurve * 0.45;
-            fogs[3] = fogCurve * 0.3;
-
-            float contrasts[4];
-            contrasts[0] = 0.55;
-            contrasts[1] = 0.7;
-            contrasts[2] = 0.85;
-            contrasts[3] = 1.0;
+            scales[0] = 0.9;  amps[0] = 0.35; bases[0] = 0.30; ridgeP[0] = 1.8; layerFog[0] = fogCurve * 0.75; contrast[0] = 0.55;
+            scales[1] = 1.3;  amps[1] = 0.40; bases[1] = 0.34; ridgeP[1] = 2.0; layerFog[1] = fogCurve * 0.6;  contrast[1] = 0.7;
+            scales[2] = 1.75; amps[2] = 0.46; bases[2] = 0.38; ridgeP[2] = 2.2; layerFog[2] = fogCurve * 0.45; contrast[2] = 0.85;
+            scales[3] = 2.2;  amps[3] = 0.52; bases[3] = 0.42; ridgeP[3] = 2.35; layerFog[3] = fogCurve * 0.32; contrast[3] = 1.0;
 
             for (int i = 0; i < 4; i++) {
-                float h = layers[i];
-                float base = bases[i];
-                float ridgeY = h + base;
-                float mask = smoothstep(ridgeY + 0.02, ridgeY - 0.05, uv.y);
-                vec3 mcol = mountainColor(h, fogs[i], contrasts[i]);
-                col = mix(col, mcol, mask * (0.45 + 0.15 * float(i)));
+                float x = (uv.x - 0.5) * (1.0 + 0.15 * float(i)) + 0.5;
+                float h = ridgeHeight(x * (1.2 + 0.25 * float(i)), t * (0.15 + 0.06 * float(i)), scales[i], amps[i], ridgeP[i]);
+                float slope = slopeDiff(x * (1.2 + 0.25 * float(i)), t * (0.15 + 0.06 * float(i)), scales[i], amps[i], ridgeP[i], eps * (1.4 + float(i) * 0.3));
+                float ridgeY = bases[i] + h * 0.6;
+                float mask = smoothstep(ridgeY + 0.015, ridgeY - 0.05, uv.y);
+                vec3 mcol = mountainColor(h, layerFog[i], contrast[i], slope);
+                col = mix(col, mcol, mask * (0.35 + 0.18 * float(i)));
             }
 
-            float snowfield = smoothstep(0.35, 0.5, uv.y);
-            vec3 snowBase = vec3(0.93, 0.95, 0.98);
-            float fieldNoise = fbm(vec2(uv.x * 6.0, uv.y * 2.0 + t * 0.05)) * 0.03;
-            col = mix(snowBase + fieldNoise, col, snowfield);
+            float snowBand = smoothstep(0.6, 0.4, uv.y);
+            vec3 snowBase = vec3(0.94, 0.96, 0.99);
+            float fieldNoise = fbm(vec2(uv.x * 3.5, uv.y * 1.6 + t * 0.03)) * 0.025;
+            col = mix(col, snowBase + fieldNoise, snowBand);
 
-            float snowFar = snowLayer(uv * vec2(1.05, 1.0), t * 0.25, 16.0, -0.05, -0.04, 0.05, 16.0, 0.15, quietCenter, quietRadius);
-            float snowMid = snowLayer(uv, t * 0.35, 12.0, -0.12, -0.08, 0.07, 18.0, 0.25, quietCenter, quietRadius);
-            float snowNear = snowLayer(uv * vec2(0.9, 1.0), t * 0.5, 9.0, -0.18, -0.12, 0.1, 22.0, 0.35, quietCenter, quietRadius);
-            float snowFront = snowLayer(uv * vec2(0.8, 1.0), t * 0.65, 6.5, -0.22, -0.16, 0.13, 26.0, 0.45, quietCenter, quietRadius);
-            float snowMix = clamp(snowFar + snowMid + snowNear + snowFront, 0.0, 1.2);
-            vec3 snowColor = vec3(0.96, 0.98, 1.0);
+            float snow1 = snowLayer(uv * vec2(1.1, 1.0), t * 0.2, 18.0, -0.04, -0.03, 0.05, 16.0, 0.02, quietCenter, quietRadius);
+            float snow2 = snowLayer(uv, t * 0.32, 13.0, -0.10, -0.06, 0.065, 18.0, 0.04, quietCenter, quietRadius);
+            float snow3 = snowLayer(uv * vec2(0.92, 1.0), t * 0.45, 10.0, -0.16, -0.1, 0.085, 20.0, 0.06, quietCenter, quietRadius);
+            float snow4 = snowLayer(uv * vec2(0.85, 1.0), t * 0.6, 7.5, -0.21, -0.14, 0.11, 22.0, 0.08, quietCenter, quietRadius);
+            float snowMix = clamp(snow1 + snow2 + snow3 + snow4, 0.0, 1.4);
+            vec3 snowColor = vec3(0.97, 0.98, 1.0);
             col = mix(col, snowColor, snowMix);
 
             float haze = smoothstep(0.3, 0.95, uv.y);
-            col = mix(col, skyHorizon, haze * 0.4);
-            float vign = smoothstep(1.1, 0.35, length(p));
-            col *= mix(0.88, 1.0, vign);
+            col = mix(col, skyHorizon, haze * 0.35);
+            float vign = smoothstep(1.05, 0.4, length(p));
+            col *= mix(0.9, 1.0, vign);
 
             gl_FragColor = vec4(col, 1.0);
         }
@@ -359,21 +357,25 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
         resize2d();
         window.addEventListener('resize', resize2d);
 
+        function hNoise(x, seed, amp) {
+            return (Math.sin(x * 2.3 + seed * 12.3) + Math.sin(x * 5.1 + seed * 3.7)) * 0.5 * amp;
+        }
+
         const layers = [
-            { color: 'rgba(210,220,230,0.5)', offset: 0.62, rough: 0.2 },
-            { color: 'rgba(200,210,225,0.7)', offset: 0.58, rough: 0.25 },
-            { color: 'rgba(190,205,220,0.8)', offset: 0.54, rough: 0.3 },
-            { color: 'rgba(175,195,215,0.9)', offset: 0.50, rough: 0.35 }
+            { color: 'rgba(215,224,234,0.55)', amp: 0.05, base: 0.62, seed: 0.3 },
+            { color: 'rgba(205,215,228,0.7)', amp: 0.07, base: 0.56, seed: 0.7 },
+            { color: 'rgba(190,205,220,0.82)', amp: 0.09, base: 0.52, seed: 1.1 },
+            { color: 'rgba(175,195,215,0.95)', amp: 0.11, base: 0.48, seed: 1.7 }
         ];
 
         const flakes = [];
-        for (let i = 0; i < 220; i++) {
+        for (let i = 0; i < 240; i++) {
             flakes.push({
                 x: Math.random() * w,
                 y: Math.random() * h,
-                r: 1 + Math.random() * 2.5,
-                s: 0.5 + Math.random() * 1.8,
-                drift: -0.3 - Math.random() * 0.4
+                r: 1 + Math.random() * 2.4,
+                s: 0.5 + Math.random() * 1.6,
+                drift: -0.25 - Math.random() * 0.35
             });
         }
 
@@ -381,26 +383,29 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             ctx.clearRect(0, 0, w, h);
             const grd = ctx.createLinearGradient(0, 0, 0, h);
             grd.addColorStop(0, '#0b1a2f');
-            grd.addColorStop(0.6, '#1a2c44');
-            grd.addColorStop(1, '#e5ebf3');
+            grd.addColorStop(0.55, '#1a2c44');
+            grd.addColorStop(1, '#e8eef5');
             ctx.fillStyle = grd;
             ctx.fillRect(0, 0, w, h);
 
             for (const layer of layers) {
                 ctx.fillStyle = layer.color;
                 ctx.beginPath();
-                ctx.moveTo(0, h * layer.offset);
-                ctx.lineTo(w * 0.25, h * (layer.offset - layer.rough * 0.2));
-                ctx.lineTo(w * 0.55, h * (layer.offset + layer.rough * 0.15));
-                ctx.lineTo(w, h * (layer.offset - layer.rough * 0.1));
+                const step = w / 80;
+                ctx.moveTo(0, h * (layer.base + hNoise(0, layer.seed, layer.amp)));
+                for (let x = 0; x <= w; x += step) {
+                    const nx = x / w;
+                    const y = h * (layer.base + hNoise(nx, layer.seed, layer.amp));
+                    ctx.lineTo(x, y);
+                }
                 ctx.lineTo(w, h);
                 ctx.lineTo(0, h);
                 ctx.closePath();
                 ctx.fill();
             }
 
-            ctx.fillStyle = '#f5f8fc';
-            ctx.fillRect(0, h * 0.58, w, h * 0.42);
+            ctx.fillStyle = '#f7f9fd';
+            ctx.fillRect(0, h * 0.6, w, h * 0.4);
 
             ctx.fillStyle = 'rgba(255,255,255,0.92)';
             const quietCenter = { x: w * 0.5, y: h * 0.55 };
@@ -408,15 +413,15 @@ window.__WHM_EFFECT_EXPECTED = window.__WHM_EFFECT_VERSION;
             for (const f of flakes) {
                 const dx = f.x - quietCenter.x;
                 const dy = f.y - quietCenter.y;
-                const quiet = 1 - Math.min(1, Math.max(0, (Math.hypot(dx, dy) - quietRadius * 0.6) / (quietRadius - quietRadius * 0.6)));
-                const alpha = 0.9 - quiet * 0.7;
+                const quiet = Math.min(1, Math.max(0, (Math.hypot(dx, dy) - quietRadius * 0.55) / (quietRadius - quietRadius * 0.55)));
+                const alpha = 0.25 + 0.75 * quiet;
                 ctx.globalAlpha = alpha;
                 ctx.beginPath();
                 ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.globalAlpha = 1;
-                f.y += f.s * 1.4;
-                f.x += f.drift + Math.sin(f.y * 0.01) * 0.6;
+                f.y += f.s * 1.35;
+                f.x += f.drift + Math.sin(f.y * 0.008) * 0.65;
                 if (f.y > h) {
                     f.y = -5;
                     f.x = Math.random() * w;

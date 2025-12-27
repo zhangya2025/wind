@@ -65,32 +65,40 @@ final class Wind_Warehouse_Query {
         $code_input = isset($_GET['code']) ? self::normalize_code(sanitize_text_field(wp_unslash($_GET['code']))) : '';
         $is_internal = self::is_internal_actor();
 
-        $html  = '<div class="ww-query">';
-        $html .= '<form method="get">';
+        $html  = '<div class="ww-app ww-app--query">';
+        $html .= '<div class="ww-shell">';
+        $html .= '<main class="ww-main">';
+
+        $html .= '<div class="ww-card ww-card--query-form">';
+        $html .= '<h2 class="ww-card__title">' . esc_html__('防伪查询', 'wind-warehouse') . '</h2>';
+        $html .= '<form method="get" class="ww-form">';
         $html .= '<label for="ww-code-input">' . esc_html__('防伪码', 'wind-warehouse') . '</label> ';
-        $html .= '<input type="text" id="ww-code-input" name="code" value="' . esc_attr($code_input) . '" />';
-        $html .= '<button type="submit">' . esc_html__('查询', 'wind-warehouse') . '</button>';
+        $html .= '<input class="ww-input" type="text" id="ww-code-input" name="code" value="' . esc_attr($code_input) . '" />';
+        $html .= '<button class="ww-btn" type="submit">' . esc_html__('查询', 'wind-warehouse') . '</button>';
         $html .= '</form>';
+        $html .= '</div>';
+
+        $result_html = '';
 
         if ($code_input !== '') {
             $rate_error = self::check_rate_limit();
             if ($rate_error !== null) {
-                $html .= '<p class="ww-error">' . esc_html($rate_error) . '</p>';
-                $html .= '</div>';
-                return $html;
+                $result_html = '<p class="ww-error">' . esc_html($rate_error) . '</p>';
+            } elseif (!preg_match(self::CODE_REGEX, $code_input)) {
+                $result_html = '<p class="ww-error">' . esc_html__('防伪码格式无效', 'wind-warehouse') . '</p>';
+            } else {
+                $result_html = self::handle_query($code_input, $is_internal);
             }
-
-            if (!preg_match(self::CODE_REGEX, $code_input)) {
-                $html .= '<p class="ww-error">' . esc_html__('防伪码格式无效', 'wind-warehouse') . '</p>';
-                $html .= '</div>';
-                return $html;
-            }
-
-            $result = self::handle_query($code_input, $is_internal);
-            $html  .= $result;
         }
 
+        if ($result_html !== '') {
+            $html .= '<div class="ww-card ww-card--query-result">' . $result_html . '</div>';
+        }
+
+        $html .= '</main>';
         $html .= '</div>';
+        $html .= '</div>';
+
         return $html;
     }
 

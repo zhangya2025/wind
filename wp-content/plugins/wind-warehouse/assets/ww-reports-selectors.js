@@ -27,6 +27,7 @@
     function renderSelector(el, options, selectedIds, syncCallback) {
         var type = el.getAttribute('data-type');
         var inputName = el.getAttribute('data-name');
+        var baseLabel = el.getAttribute('data-label') || '';
         var searchInput = qs(el, '.ww-ms-search');
         var resultsEl = qs(el, '.ww-ms-results');
         var selectedEl = qs(el, '.ww-ms-selected');
@@ -41,13 +42,15 @@
         });
 
         function updateCount() {
+            var currentCount = Object.keys(selectedMap).length;
+            var labelWithCount = baseLabel ? '(已选 ' + currentCount + ')' : String(currentCount);
             if (countEl) {
-                countEl.textContent = 'Selected ' + Object.keys(selectedMap).length;
+                countEl.textContent = labelWithCount;
             }
             if (countTarget) {
                 var popoverCounts = document.querySelectorAll('[data-popover-count="' + countTarget + '"]');
                 Array.prototype.slice.call(popoverCounts).forEach(function (node) {
-                    node.textContent = 'Selected ' + Object.keys(selectedMap).length;
+                    node.textContent = labelWithCount;
                 });
             }
         }

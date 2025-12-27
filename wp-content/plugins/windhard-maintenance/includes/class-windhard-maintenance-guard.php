@@ -193,6 +193,9 @@ class Windhard_Maintenance_Guard {
      * @return bool
      */
     private function is_login_exempt($path, $options) {
+        if ($path === '/wp-login.php') {
+            return true;
+        }
         $lines = $this->explode_lines(isset($options['login_exempt_paths']) ? $options['login_exempt_paths'] : '');
         return $this->path_matches_any($path, $lines);
     }

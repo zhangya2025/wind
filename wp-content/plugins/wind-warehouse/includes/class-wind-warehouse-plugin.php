@@ -144,13 +144,17 @@ final class Wind_Warehouse_Plugin {
     public static function enqueue_front_assets(): void {
         global $post;
 
-        $is_plugin_page = false;
-        $shortcodes = ['wind_warehouse_portal', 'wind_warehouse_query', 'wind_warehouse_reports'];
+        $is_plugin_page  = false;
+        $is_portal_page  = false;
+        $shortcodes      = ['wind_warehouse_portal', 'wind_warehouse_query', 'wind_warehouse_reports'];
 
         if ($post instanceof WP_Post) {
             foreach ($shortcodes as $shortcode) {
                 if (has_shortcode((string) $post->post_content, $shortcode)) {
                     $is_plugin_page = true;
+                    if ($shortcode === 'wind_warehouse_portal') {
+                        $is_portal_page = true;
+                    }
                     break;
                 }
             }
@@ -159,6 +163,9 @@ final class Wind_Warehouse_Plugin {
         if (!$is_plugin_page) {
             if (is_page('warehouse') || is_page('query') || is_page('verify')) {
                 $is_plugin_page = true;
+                if (is_page('warehouse')) {
+                    $is_portal_page = true;
+                }
             }
         }
 
@@ -171,6 +178,19 @@ final class Wind_Warehouse_Plugin {
                     [],
                     filemtime($style_path),
                     'all'
+                );
+            }
+        }
+
+        if ($is_portal_page) {
+            $script_path = plugin_dir_path(self::$plugin_file) . 'assets/ww-sku-filter.js';
+            if (file_exists($script_path)) {
+                wp_enqueue_script(
+                    'ww-sku-filter',
+                    plugin_dir_url(self::$plugin_file) . 'assets/ww-sku-filter.js',
+                    [],
+                    filemtime($script_path),
+                    true
                 );
             }
         }
@@ -197,7 +217,7 @@ final class Wind_Warehouse_Plugin {
             return;
         }
 
-        if (!current_user_can('wh_manage_dealers')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_manage_dealers')) {
             return;
         }
 

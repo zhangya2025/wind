@@ -126,7 +126,7 @@ final class Wind_Warehouse_Portal {
             return '';
         }
 
-        if (!user_can($user, 'wh_view_portal')) {
+        if (!user_can($user, 'manage_options') && !user_can($user, 'wh_view_portal')) {
             return wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
@@ -221,6 +221,10 @@ final class Wind_Warehouse_Portal {
     }
 
     private static function user_can_access_view(string $view_key, WP_User $user): bool {
+        if (user_can($user, 'manage_options')) {
+            return true;
+        }
+
         if ($view_key === 'dashboard') {
             return true;
         }
@@ -1149,7 +1153,7 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        if (!current_user_can('wh_manage_dealers')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_manage_dealers')) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
@@ -1253,7 +1257,7 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        if (!current_user_can('wh_manage_dealers')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_manage_dealers')) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
@@ -1322,7 +1326,7 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        if (!current_user_can('wh_manage_skus')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_manage_skus')) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
@@ -1554,7 +1558,7 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        if (!current_user_can('wh_manage_dealers')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_manage_dealers')) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
@@ -2014,7 +2018,7 @@ final class Wind_Warehouse_Portal {
             $wpdb->prepare(
                 "SELECT id, sku_code, name, color, size FROM {$sku_table} WHERE status = %s ORDER BY id DESC LIMIT %d",
                 'active',
-                100
+                500
             ),
             ARRAY_A
         );
@@ -2045,7 +2049,8 @@ final class Wind_Warehouse_Portal {
             $html .= '<p>' . esc_html__('暂无可用的 SKU，请先添加。', 'wind-warehouse') . '</p>';
         } else {
             $html .= '<p><label>' . esc_html__('SKU', 'wind-warehouse') . '<br />';
-            $html .= '<select name="sku_id" required>';
+            $html .= '<input type="text" class="ww-input" id="ww-sku-filter" placeholder="' . esc_attr__('搜索 SKU（编号/名称/颜色/尺码）', 'wind-warehouse') . '" autocomplete="off" />';
+            $html .= '<select id="ww-sku-select" name="sku_id" required>';
             foreach ($skus as $sku) {
                 $label = $sku['sku_code'] . ' - ' . $sku['name'];
 
@@ -2623,7 +2628,7 @@ final class Wind_Warehouse_Portal {
     }
 
     public static function ajax_ship_validate_code(): void {
-        if (!is_user_logged_in() || !current_user_can('wh_ship_codes')) {
+        if (!is_user_logged_in() || (!current_user_can('manage_options') && !current_user_can('wh_ship_codes'))) {
             wp_send_json_error(['message' => __('Forbidden', 'wind-warehouse')], 403);
         }
 
@@ -2675,7 +2680,7 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        if (!current_user_can('wh_ship_codes')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_ship_codes')) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
@@ -2844,7 +2849,7 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        if (!current_user_can('wh_ship_codes')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_ship_codes')) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
@@ -2949,7 +2954,7 @@ final class Wind_Warehouse_Portal {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 
-        if (!current_user_can('wh_ship_codes')) {
+        if (!current_user_can('manage_options') && !current_user_can('wh_ship_codes')) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
         }
 

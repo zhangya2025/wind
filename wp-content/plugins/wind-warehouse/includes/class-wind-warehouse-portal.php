@@ -61,6 +61,7 @@ final class Wind_Warehouse_Portal {
         add_action('wp_ajax_ww_add_sku', [self::class, 'ajax_add_sku']);
         add_action('wp_ajax_ww_add_dealer', [self::class, 'ajax_add_dealer']);
         add_action('admin_post_ww_dealers_add', [self::class, 'admin_post_dealers_add']);
+        add_action('admin_post_ww_dealers_update', [self::class, 'admin_post_dealers_update']);
         add_action('admin_post_ww_dealers_toggle', [self::class, 'admin_post_dealers_toggle']);
         add_action('admin_post_ww_ship_create', [self::class, 'admin_post_ship_create']);
         add_action('wp_ajax_ww_ship_validate_code', [self::class, 'ajax_ship_validate_code']);
@@ -1321,6 +1322,108 @@ final class Wind_Warehouse_Portal {
         exit;
     }
 
+    public static function admin_post_dealers_update(): void {
+        if (!is_user_logged_in()) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        if (!current_user_can('manage_options') && !current_user_can('wh_manage_dealers')) {
+            wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
+        }
+
+        $redirect = add_query_arg('wh', 'dealers', self::portal_url());
+        $dealer_id = isset($_POST['dealer_id']) ? absint($_POST['dealer_id']) : 0;
+
+        if ($dealer_id < 1) {
+            wp_safe_redirect(add_query_arg(['err' => 'bad_request'], $redirect));
+            exit;
+        }
+
+        if (!isset($_POST['ww_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ww_nonce'])), 'ww_dealers_update_' . $dealer_id)) {
+            wp_safe_redirect(add_query_arg(['err' => 'bad_nonce'], $redirect));
+            exit;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'wh_dealers';
+
+        $existing_dealer = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT dealer_code FROM {$table} WHERE id = %d",
+                $dealer_id
+            ),
+            ARRAY_A
+        );
+
+        if ($existing_dealer === null) {
+            wp_safe_redirect(add_query_arg(['err' => 'bad_request'], $redirect));
+            exit;
+        }
+
+        $input_data = self::collect_dealer_input();
+        $input_data['dealer_code'] = $existing_dealer['dealer_code'];
+
+        $validation_error = self::validate_dealer_input($input_data);
+
+        if ($validation_error !== null) {
+            $redirect_url = add_query_arg(
+                [
+                    'err'     => 'validation',
+                    'err_msg' => rawurlencode($validation_error),
+                ],
+                $redirect
+            );
+            wp_safe_redirect($redirect_url);
+            exit;
+        }
+
+        $updated = $wpdb->update(
+            $table,
+            [
+                'name'                               => $input_data['name'],
+                'phone'                              => $input_data['phone'],
+                'address'                            => $input_data['address'],
+                'contact_name'                       => $input_data['contact_name'],
+                'intro'                              => $input_data['intro'],
+                'authorized_from'                    => $input_data['authorized_from'],
+                'authorized_to'                      => $input_data['authorized_to'],
+                'business_license_attachment_id'     => $input_data['business_license_attachment_id'],
+                'authorization_letter_attachment_id' => $input_data['authorization_letter_attachment_id'],
+                'updated_at'                         => current_time('mysql'),
+            ],
+            ['id' => $dealer_id],
+            [
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+            ],
+            ['%d']
+        );
+
+        if ($updated === false) {
+            wp_safe_redirect(add_query_arg(['err' => 'update_failed'], $redirect));
+            exit;
+        }
+
+        $redirect_url = add_query_arg(
+            [
+                'wh'  => 'dealers',
+                'msg' => 'updated',
+            ],
+            self::portal_url()
+        );
+
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
+
     public static function ajax_add_sku(): void {
         if (!is_user_logged_in()) {
             wp_die(__('Forbidden', 'wind-warehouse'), '', ['response' => 403]);
@@ -1869,6 +1972,24 @@ final class Wind_Warehouse_Portal {
 
         $success_message = '';
         $query_error_message = null;
+        $edit_id = isset($_GET['edit_id']) ? absint($_GET['edit_id']) : 0;
+        $edit_dealer = null;
+
+        if ($edit_id > 0) {
+            $edit_dealer = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT id, dealer_code, name, phone, address, contact_name, intro, authorized_from, authorized_to, business_license_attachment_id, authorization_letter_attachment_id FROM {$table} WHERE id = %d",
+                    $edit_id
+                ),
+                ARRAY_A
+            );
+
+            if ($edit_dealer === null) {
+                $query_error_message = __('无效经销商。', 'wind-warehouse');
+                $edit_id = 0;
+            }
+        }
+
         if (isset($_GET['msg'])) {
             $msg = sanitize_text_field(wp_unslash($_GET['msg']));
             if ($msg === 'enabled') {
@@ -1877,6 +1998,8 @@ final class Wind_Warehouse_Portal {
                 $success_message = __('经销商已停用。', 'wind-warehouse');
             } elseif ($msg === 'created') {
                 $success_message = __('经销商创建成功。', 'wind-warehouse');
+            } elseif ($msg === 'updated') {
+                $success_message = __('经销商已更新。', 'wind-warehouse');
             }
         }
 
@@ -1917,36 +2040,45 @@ final class Wind_Warehouse_Portal {
             $html .= '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
         }
         $html .= '<form method="post" action="' . esc_url($form_action) . '">';
-        $html .= '<input type="hidden" name="action" value="ww_dealers_add" />';
-        $html .= '<h2>' . esc_html__('添加经销商', 'wind-warehouse') . '</h2>';
+        $html .= '<input type="hidden" name="action" value="' . ($edit_id > 0 ? 'ww_dealers_update' : 'ww_dealers_add') . '" />';
+        if ($edit_id > 0 && $edit_dealer !== null) {
+            $html .= '<input type="hidden" name="dealer_id" value="' . esc_attr($edit_dealer['id']) . '" />';
+        }
+        $html .= '<h2>' . ($edit_id > 0 ? esc_html__('编辑经销商', 'wind-warehouse') : esc_html__('添加经销商', 'wind-warehouse')) . '</h2>';
         $html .= '<p><label>' . esc_html__('经销商编码', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="dealer_code" required /></label></p>';
+        $html .= '<input type="text" name="dealer_code" value="' . ($edit_dealer !== null ? esc_attr($edit_dealer['dealer_code']) : '') . '"' . ($edit_id > 0 ? ' readonly' : '') . ' required /></label></p>';
         $html .= '<p><label>' . esc_html__('名称', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="name" required /></label></p>';
+        $html .= '<input type="text" name="name" value="' . ($edit_dealer !== null ? esc_attr($edit_dealer['name']) : '') . '" required /></label></p>';
         $html .= '<p><label>' . esc_html__('电话（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="phone" maxlength="50" /></label></p>';
+        $html .= '<input type="text" name="phone" maxlength="50" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['phone']) : '') . '" /></label></p>';
         $html .= '<p><label>' . esc_html__('联系人（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="contact_name" maxlength="100" /></label></p>';
+        $html .= '<input type="text" name="contact_name" maxlength="100" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['contact_name']) : '') . '" /></label></p>';
         $html .= '<p><label>' . esc_html__('地址（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="address" maxlength="255" /></label></p>';
+        $html .= '<input type="text" name="address" maxlength="255" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['address']) : '') . '" /></label></p>';
         $html .= '<p><label>' . esc_html__('备注（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="text" name="intro" maxlength="255" /></label></p>';
+        $html .= '<input type="text" name="intro" maxlength="255" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['intro']) : '') . '" /></label></p>';
         $html .= '<p><label>' . esc_html__('授权开始（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="date" name="authorized_from" /></label></p>';
+        $html .= '<input type="date" name="authorized_from" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['authorized_from']) : '') . '" /></label></p>';
         $html .= '<p><label>' . esc_html__('授权截止（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="date" name="authorized_to" /></label></p>';
+        $html .= '<input type="date" name="authorized_to" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['authorized_to']) : '') . '" /></label></p>';
         $html .= '<p><label>' . esc_html__(self::glossary('business') . '（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="hidden" name="business_license_attachment_id" id="ww_business_license_attachment_id" />';
+        $html .= '<input type="hidden" name="business_license_attachment_id" id="ww_business_license_attachment_id" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['business_license_attachment_id']) : '') . '" />';
         $html .= '<button type="button" class="button" id="ww_business_license_button">' . esc_html__('选择/上传', 'wind-warehouse') . '</button> ';
         $html .= '<button type="button" class="button" id="ww_business_license_remove">' . esc_html__('移除', 'wind-warehouse') . '</button>';
         $html .= '<div id="ww_business_license_preview" class="ww-media-preview"></div></label></p>';
         $html .= '<p><label>' . esc_html__(self::glossary('authorization') . '（可选）', 'wind-warehouse') . '<br />';
-        $html .= '<input type="hidden" name="authorization_letter_attachment_id" id="ww_authorization_letter_attachment_id" />';
+        $html .= '<input type="hidden" name="authorization_letter_attachment_id" id="ww_authorization_letter_attachment_id" value="' . ($edit_dealer !== null ? esc_attr((string) $edit_dealer['authorization_letter_attachment_id']) : '') . '" />';
         $html .= '<button type="button" class="button" id="ww_authorization_letter_button">' . esc_html__('选择/上传', 'wind-warehouse') . '</button> ';
         $html .= '<button type="button" class="button" id="ww_authorization_letter_remove">' . esc_html__('移除', 'wind-warehouse') . '</button>';
         $html .= '<div id="ww_authorization_letter_preview" class="ww-media-preview"></div></label></p>';
-        $html .= wp_nonce_field('ww_dealers_add', 'ww_nonce', true, false);
-        $html .= '<p><button type="submit">' . esc_html(self::glossary('add')) . '</button></p>';
+        $html .= $edit_id > 0 && $edit_dealer !== null
+            ? wp_nonce_field('ww_dealers_update_' . $edit_dealer['id'], 'ww_nonce', true, false)
+            : wp_nonce_field('ww_dealers_add', 'ww_nonce', true, false);
+        $html .= '<p><button type="submit">' . ($edit_id > 0 ? esc_html__('保存修改', 'wind-warehouse') : esc_html(self::glossary('add'))) . '</button>';
+        if ($edit_id > 0) {
+            $html .= ' <a href="' . esc_url(add_query_arg(['wh' => 'dealers'], self::portal_url())) . '">' . esc_html__('取消编辑', 'wind-warehouse') . '</a>';
+        }
+        $html .= '</p>';
         $html .= '</form>';
 
         $html .= '<h2>' . esc_html__('最新经销商列表', 'wind-warehouse') . '</h2>';
@@ -1993,6 +2125,14 @@ final class Wind_Warehouse_Portal {
                 $html .= wp_nonce_field('ww_dealers_toggle', 'ww_nonce', true, false);
                 $html .= '<button type="submit">' . $button_label . '</button>';
                 $html .= '</form>';
+                $edit_url = add_query_arg(
+                    [
+                        'wh'      => 'dealers',
+                        'edit_id' => $dealer['id'],
+                    ],
+                    self::portal_url()
+                );
+                $html .= ' <a class="button" href="' . esc_url($edit_url) . '">' . esc_html__('编辑', 'wind-warehouse') . '</a>';
                 $html .= '</td>';
 
                 $html .= '</tr>';

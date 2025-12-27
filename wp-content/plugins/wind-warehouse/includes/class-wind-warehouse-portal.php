@@ -426,11 +426,11 @@ final class Wind_Warehouse_Portal {
         $html .= '<div class="ww-reports-filters-row ww-reports-filters-row--popovers">';
 
         $dealer_selected_count = count($filters['dealer_ids']);
-        $dealer_label          = esc_html__('Dealers', 'wind-warehouse');
-        $dealer_count_text     = esc_html(sprintf(_x('(已选 %d)', 'Reports filter selected count suffix', 'wind-warehouse'), $dealer_selected_count));
+        $dealer_label          = esc_html__('经销商', 'wind-warehouse');
+        $dealer_count_text     = esc_html(sprintf('（已选%d）', $dealer_selected_count));
         $html .= '<div class="ww-field ww-popover" data-popover-key="dealers">';
         $html .= '<button type="button" class="ww-popover-trigger" data-popover="dealers">';
-        $html .= '<span class="ww-popover-label">' . $dealer_label . '</span>';
+        $html .= '<span class="ww-popover-label" data-popover-label="dealers">' . $dealer_label . '</span>';
         $html .= '<span class="ww-popover-count" data-popover-count="dealers">' . $dealer_count_text . '</span>';
         $html .= '</button>';
         $html .= '<div class="ww-popover-panel" data-popover-panel="dealers" hidden>';
@@ -449,11 +449,11 @@ final class Wind_Warehouse_Portal {
         $html .= '</div>';
 
         $sku_selected_count = count($filters['sku_ids']);
-        $sku_label          = esc_html__('SKUs', 'wind-warehouse');
-        $sku_count_text     = esc_html(sprintf(_x('(已选 %d)', 'Reports filter selected count suffix', 'wind-warehouse'), $sku_selected_count));
+        $sku_label          = esc_html__('SKU', 'wind-warehouse');
+        $sku_count_text     = esc_html(sprintf('（已选%d）', $sku_selected_count));
         $html .= '<div class="ww-field ww-popover" data-popover-key="skus">';
         $html .= '<button type="button" class="ww-popover-trigger" data-popover="skus">';
-        $html .= '<span class="ww-popover-label">' . $sku_label . '</span>';
+        $html .= '<span class="ww-popover-label" data-popover-label="skus">' . $sku_label . '</span>';
         $html .= '<span class="ww-popover-count" data-popover-count="skus">' . $sku_count_text . '</span>';
         $html .= '</button>';
         $html .= '<div class="ww-popover-panel" data-popover-panel="skus" hidden>';

@@ -73,6 +73,33 @@ class Windhard_Maintenance_Guard {
         $mode = isset($options['mode']) ? $options['mode'] : 'maintenance';
         $noindex = !empty($options['noindex']);
 
+        $headline_text = isset($options['headline_text']) ? trim($options['headline_text']) : '';
+        $headline = $headline_text !== '' ? $headline_text : $reason;
+        $headline_color = sanitize_hex_color(isset($options['headline_color']) ? $options['headline_color'] : '') ?: '#FFFFFF';
+        $headline_size = $this->normalize_size(isset($options['headline_size']) ? $options['headline_size'] : 'xl', array('m', 'l', 'xl', 'xxl'), 'xl');
+
+        $subhead_text = isset($options['subhead_text']) ? trim($options['subhead_text']) : '';
+        $subhead_color = sanitize_hex_color(isset($options['subhead_color']) ? $options['subhead_color'] : '') ?: '#FFFFFF';
+        $subhead_size = $this->normalize_size(isset($options['subhead_size']) ? $options['subhead_size'] : 'm', array('s', 'm', 'l', 'xl'), 'm');
+
+        $reason_text = $headline_text === '' ? '' : $reason;
+
+        $headline_font_sizes = array(
+            'm' => '28px',
+            'l' => '32px',
+            'xl' => '40px',
+            'xxl' => '48px',
+        );
+        $subhead_font_sizes = array(
+            's' => '14px',
+            'm' => '16px',
+            'l' => '18px',
+            'xl' => '20px',
+        );
+
+        $headline_font_size = isset($headline_font_sizes[$headline_size]) ? $headline_font_sizes[$headline_size] : $headline_font_sizes['xl'];
+        $subhead_font_size = isset($subhead_font_sizes[$subhead_size]) ? $subhead_font_sizes[$subhead_size] : $subhead_font_sizes['m'];
+
         include WINDHARD_MAINTENANCE_PLUGIN_DIR . 'public/maintenance-template.php';
         exit;
     }
@@ -321,5 +348,22 @@ class Windhard_Maintenance_Guard {
         }
 
         return array_filter(array_map('trim', $lines), 'strlen');
+    }
+
+    /**
+     * Normalize size key.
+     *
+     * @param string $value   Raw value.
+     * @param array  $allowed Allowed keys.
+     * @param string $default Default value.
+     * @return string
+     */
+    private function normalize_size($value, $allowed, $default) {
+        $value = sanitize_text_field($value);
+        if (!in_array($value, $allowed, true)) {
+            return $default;
+        }
+
+        return $value;
     }
 }

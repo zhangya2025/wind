@@ -41,13 +41,25 @@
         });
 
         function updateCount() {
+            var currentCount = Object.keys(selectedMap).length;
+            var countText = '（已选' + currentCount + '）';
+            var triggerText = countText;
+
             if (countEl) {
-                countEl.textContent = 'Selected ' + Object.keys(selectedMap).length;
+                countEl.textContent = countText;
             }
+
             if (countTarget) {
+                var popoverContainer = el.closest('.ww-popover');
+                var popoverLabel = popoverContainer ? (popoverContainer.getAttribute('data-label') || '') : '';
                 var popoverCounts = document.querySelectorAll('[data-popover-count="' + countTarget + '"]');
+
+                if (popoverLabel) {
+                    triggerText = popoverLabel + countText;
+                }
+
                 Array.prototype.slice.call(popoverCounts).forEach(function (node) {
-                    node.textContent = 'Selected ' + Object.keys(selectedMap).length;
+                    node.textContent = triggerText;
                 });
             }
         }

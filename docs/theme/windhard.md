@@ -88,7 +88,10 @@ Header 统一为 `.wh-header`，拆分为两层：
   - 缩小主栏 vertical padding（12px）和 top bar 高度（36px）
   - 使用 WordPress Navigation 默认 overlay/collapse 行为，不引入自定义菜单动画
 
+- 防遮挡：为 header 后第一个区块提供 `scroll-margin-top` 基线，避免锚点/首屏内容被 sticky header 视觉压住。
+
 ### 6.4 可访问性与作用域
 
 - Header 相关样式均限定在 `.wh-header*` 作用域，避免影响正文和后台。
+- 公告条默认显示；在 Site Editor 给 Top Bar Group 添加 `is-hidden` class 可隐藏。
 - 链接 hover/focus 保持可感知反馈；不移除全局 focus ring。

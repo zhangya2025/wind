@@ -50,3 +50,45 @@
 
 该回滚不涉及数据库迁移，也不修改插件业务逻辑。
 
+
+## 6. Header 基线（公告条 + 导航间距 + sticky）
+
+### 6.1 实际生效模板来源
+
+- 当前所有核心模板（`index/home/single/page/archive/search/404`）都通过 `<!-- wp:template-part {"slug":"header"} /-->` 引用同一个 header template part。
+- 实际生效文件为：`wp-content/themes/windhard/parts/header.html`。
+- 本次仅改该实际生效 header 模板，不触碰 `vertical-header`、`header-large-title` 等备用 part。
+
+### 6.2 两层结构
+
+Header 统一为 `.wh-header`，拆分为两层：
+
+1. **Top Bar（公告条）**
+   - 容器：`.wh-header__top > .wh-container.wh-header__top-inner`
+   - 内容：左侧公告文案，右侧辅助链接（Shipping / Support）
+   - 视觉：紧凑高度（38px 基线，移动端 36px），small 字号
+   - 开关：默认显示；在站点编辑器中给该 Group 增加 `is-hidden` class 即可隐藏
+
+2. **Main Header（主导航）**
+   - 容器：`.wh-header__main > .wh-container.wh-header__main-inner`
+   - 左：Logo + 站点标题
+   - 中：`core/navigation`
+   - 右：动作区（当前为 Contact 按钮）
+   - 间距：继承 `.wh-container`（`--wh-container-pad` + `--wh-container-max`）
+
+### 6.3 Sticky 策略
+
+- 断点：`960px`
+- 桌面（`>=960px`）：
+  - `.wh-header` 使用 `position: sticky; top: 0; z-index: 30;`
+  - 保持固定高度节奏，不在 sticky 状态切换 padding/字号
+  - 底部保留 `1px` 分割线，避免与正文粘连
+- 移动端（`<960px`）：
+  - 仍保持 sticky
+  - 缩小主栏 vertical padding（12px）和 top bar 高度（36px）
+  - 使用 WordPress Navigation 默认 overlay/collapse 行为，不引入自定义菜单动画
+
+### 6.4 可访问性与作用域
+
+- Header 相关样式均限定在 `.wh-header*` 作用域，避免影响正文和后台。
+- 链接 hover/focus 保持可感知反馈；不移除全局 focus ring。

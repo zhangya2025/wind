@@ -142,3 +142,97 @@ body:not(.wp-admin) :where(a:focus-visible, button:focus-visible, .wp-block-butt
 body:not(.wp-admin) :where(.wp-block-button__link, button, input[type="button"], input[type="submit"]) {
   border-width: var(--wh-border-width);
 }
+
+body:not(.wp-admin) .wh-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--wh-color-bg);
+  border-bottom: var(--wh-border-width) solid var(--wh-border-color);
+}
+
+body:not(.wp-admin) .wh-header__top {
+  background: var(--wh-color-primary);
+  color: var(--wh-color-primary-contrast);
+  border-bottom: var(--wh-border-width) solid color-mix(in srgb, var(--wh-color-primary-contrast) 20%, transparent);
+}
+
+body:not(.wp-admin) .wh-header__top.is-hidden {
+  display: none;
+}
+
+body:not(.wp-admin) .wh-header__top-inner {
+  min-height: 38px;
+  gap: 10px;
+  font-size: var(--wp--preset--font-size--small);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+body:not(.wp-admin) .wh-header__top-inner p {
+  margin: 0;
+}
+
+body:not(.wp-admin) .wh-header__top-links {
+  display: inline-flex;
+  gap: 12px;
+  font-weight: 600;
+}
+
+body:not(.wp-admin) .wh-header__top-links a {
+  color: inherit;
+  text-underline-offset: 0.15em;
+}
+
+body:not(.wp-admin) .wh-header__top-links a:hover {
+  text-decoration: underline;
+}
+
+body:not(.wp-admin) .wh-header__main {
+  background: var(--wh-color-bg);
+}
+
+body:not(.wp-admin) .wh-header__main-inner {
+  margin: 0;
+  padding-block: 16px;
+  align-items: center;
+}
+
+body:not(.wp-admin) .wh-header__main-inner .wp-block-navigation {
+  font-size: var(--wp--preset--font-size--medium);
+}
+
+body:not(.wp-admin) .wh-header__main-inner .wp-block-navigation-item__content:hover {
+  color: color-mix(in srgb, var(--wh-color-text) 85%, transparent);
+}
+
+body:not(.wp-admin) .wh-header__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+body:not(.wp-admin) .wh-header__actions .wp-block-buttons {
+  margin-bottom: 0;
+}
+
+@media (max-width: 959px) {
+  body:not(.wp-admin) .wh-header__top-inner {
+    min-height: 36px;
+  }
+
+  body:not(.wp-admin) .wh-header__main-inner {
+    padding-block: 12px;
+  }
+
+  body:not(.wp-admin) .wh-header__main-inner {
+    gap: 10px;
+  }
+
+  body:not(.wp-admin) .wh-header__actions {
+    display: none;
+  }
+
+  body:not(.wp-admin) .wh-header__main-inner .wp-block-navigation {
+    justify-content: flex-end;
+  }
+}

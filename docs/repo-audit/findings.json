@@ -1,0 +1,108 @@
+{
+  "wordpress_root": "/ (full WordPress core present at repo root; additional core copy exists under /wordpress)",
+  "themes": [
+    {
+      "name": "twentytwentyfive",
+      "type": "block-theme",
+      "has_theme_json": true,
+      "asset_pipeline": "postcss+cssnano (style.css -> style.min.css)"
+    },
+    {
+      "name": "twentytwentyfour",
+      "type": "block-theme",
+      "has_theme_json": true,
+      "asset_pipeline": "none-detected"
+    },
+    {
+      "name": "twentytwentythree",
+      "type": "block-theme",
+      "has_theme_json": true,
+      "asset_pipeline": "none-detected"
+    },
+    {
+      "name": "twentytwentytwo",
+      "type": "block-theme",
+      "has_theme_json": true,
+      "asset_pipeline": "postcss+cssnano (style.css -> style.min.css)"
+    }
+  ],
+  "custom_plugins": [
+    {
+      "name": "wind-warehouse",
+      "provides": {
+        "cpt": false,
+        "taxonomy": false,
+        "blocks": false,
+        "shortcodes": true,
+        "rest": false,
+        "admin_pages": true,
+        "custom_db_tables": true,
+        "custom_roles_caps": true
+      }
+    },
+    {
+      "name": "windhard-core",
+      "provides": {
+        "cpt": false,
+        "taxonomy": false,
+        "blocks": false,
+        "shortcodes": false,
+        "rest": false,
+        "admin_pages": false,
+        "request_filters": true
+      }
+    },
+    {
+      "name": "windhard-maintenance",
+      "provides": {
+        "cpt": false,
+        "taxonomy": false,
+        "blocks": false,
+        "shortcodes": false,
+        "rest": false,
+        "admin_pages": true,
+        "request_guard": true
+      }
+    },
+    {
+      "name": "windhard-safe",
+      "provides": {
+        "cpt": false,
+        "taxonomy": false,
+        "blocks": false,
+        "shortcodes": false,
+        "rest": false,
+        "admin_pages": false,
+        "login_url_rewrite": true
+      }
+    }
+  ],
+  "scan_counts_wp_content": {
+    "register_post_type": 0,
+    "register_taxonomy": 0,
+    "add_shortcode": 2,
+    "register_block_type": 0,
+    "wp_enqueue_style": 8,
+    "wp_enqueue_script": 9,
+    "register_rest_route": 6,
+    "add_rewrite_rule": 0
+  },
+  "build": {
+    "composer": false,
+    "node": true,
+    "github_actions": false
+  },
+  "style": {
+    "has_css_variables": true,
+    "has_tailwind": false,
+    "typography_system": "defined-mixed (theme.json presets + plugin ww-font levels)"
+  },
+  "recommendation": {
+    "approach": "child-theme",
+    "reasons": [
+      "current themes are block/FSE and already tokenized with theme.json",
+      "business frontend coupling is mostly in custom plugins, so child-theme minimizes risk",
+      "avoids direct edits to upstream default themes and lowers upgrade conflict risk"
+    ]
+  }
+}

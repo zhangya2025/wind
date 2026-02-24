@@ -1,0 +1,48 @@
+:root {
+  --wh-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans", "Noto Sans SC", sans-serif;
+  --wh-font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --wh-color-text: #111111;
+  --wh-color-bg: #ffffff;
+  --wh-color-surface: #f7f7f8;
+  --wh-color-primary: #1a4cff;
+  --wh-color-primary-contrast: #ffffff;
+  --wh-space-section: clamp(2.5rem, 5vw, 5rem);
+  --wh-space-section-tight: clamp(1.5rem, 3vw, 3rem);
+  --wh-container-max: 1200px;
+  --wh-container-pad: clamp(1rem, 2vw, 2rem);
+  --wh-radius-button: 999px;
+}
+
+.container {
+  width: min(100% - (var(--wh-container-pad) * 2), var(--wh-container-max));
+  margin-inline: auto;
+}
+
+.section {
+  padding-block: var(--wh-space-section);
+}
+
+.section--tight {
+  padding-block: var(--wh-space-section-tight);
+}
+
+.button,
+.wp-block-button__link,
+button,
+input[type="button"],
+input[type="submit"] {
+  border-radius: var(--wh-radius-button);
+  background: var(--wh-color-primary);
+  color: var(--wh-color-primary-contrast);
+  border: 1px solid var(--wh-color-primary);
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+}
+
+.button:hover,
+.wp-block-button__link:hover,
+button:hover,
+input[type="button"]:hover,
+input[type="submit"]:hover {
+  filter: brightness(0.95);
+}

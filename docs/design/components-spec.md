@@ -115,3 +115,39 @@
 - 默认链接样式不加下划线；仅在特定场景（如导航）按需控制。
 - 所有可交互元素必须具备可见 focus 态。
 - 仅可使用 `docs/design/tokens.json` 中定义的 token，不允许新增随意硬编码值。
+
+---
+
+## 6) Navigation Mega Menu
+
+### 信息架构
+- 仅对一级导航项（`Navigation Submenu`）带 `is-mega` class 的节点启用 Mega Menu。
+- 层级结构：一级 `is-mega` → 二级列标题（`has-child` 链接）→ 三级链接列表。
+
+### 标记规则
+- 后台编辑导航时，为需要 Mega 的一级项添加 class：`is-mega`。
+- 主题选择器必须限定在 header 主导航范围：`header .wh-primary-nav ...`。
+- 仅 `header .wh-primary-nav .wp-block-navigation-item.is-mega` 使用 mega 样式；普通下拉保持默认行为。
+
+### 桌面端（`min-width: 960px`）
+- 一级 `is-mega` 的 submenu 面板：
+  - 全宽展示（`width: 100vw`，`inset-inline: 0`）
+  - 背景：`semantic.surface`
+  - 边框：`1px solid semantic.border`
+  - 内部布局：`grid` 多列，`repeat(auto-fit, minmax(200px, 1fr))`
+  - 内间距与列间距：使用 spacing token
+- 打开行为：使用 `:hover` + `:focus-within`，仅做透明度/可见性切换，不改变尺寸，避免抖动。
+- 三级展开方式：禁止三级 flyout；二级项的 submenu 容器改为静态可见列表（`position: static` + 可见性强制开启）。
+- 二级 submenu toggle 按钮仅桌面端隐藏。
+
+### 排版与状态
+- 二级列标题：`font-weight: 600`、小号字、轻度字距、可大写，标题和列表间距使用 spacing token。
+- 三级链接：小号字，`line-height` 保持可读（约 1.6）。
+- hover：使用克制下划线反馈。
+- active/current：命中 `current-menu-item` 或 `aria-current="page"` 时加强字重并保留下划线。
+- focus：沿用全局可见 focus 规则。
+
+### 移动端（`max-width: 959px`）
+- 不启用 mega 面板布局（不使用桌面的全宽 absolute + grid）。
+- 保持 WordPress 默认折叠菜单交互。
+- 仅增强二级/三级项点击区（padding 使用 spacing token）。

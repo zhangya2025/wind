@@ -237,6 +237,98 @@ body:not(.wp-admin) .wh-header__nav .wp-block-navigation-item__content:focus-vis
   outline-color: color-mix(in srgb, var(--wh-focus-color) 60%, transparent);
 }
 
+
+
+@media (min-width: 960px) {
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega {
+    position: static;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container {
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    width: 100vw;
+    margin: 0;
+    padding: var(--wp--preset--spacing--40) var(--wh-container-pad);
+    border: var(--wh-border-width) solid var(--wh-border-color);
+    background: var(--wh-color-surface);
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--wp--preset--spacing--40);
+    z-index: 80;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.16s ease;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega:hover > .wp-block-navigation__submenu-container,
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega:focus-within > .wp-block-navigation__submenu-container {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child {
+    margin: 0;
+    min-width: 0;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation-submenu__toggle {
+    display: none;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation-item__content {
+    display: inline-flex;
+    margin-bottom: var(--wp--preset--spacing--20);
+    font-size: var(--wp--preset--font-size--small);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    line-height: 1.4;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation__submenu-container {
+    position: static !important;
+    display: grid !important;
+    gap: var(--wp--preset--spacing--20);
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation__submenu-container > .wp-block-navigation-item {
+    margin: 0;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation__submenu-container > .wp-block-navigation-item > .wp-block-navigation-item__content {
+    font-size: var(--wp--preset--font-size--small);
+    line-height: 1.6;
+    color: var(--wh-color-text);
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation__submenu-container > .wp-block-navigation-item > .wp-block-navigation-item__content:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation__submenu-container > .wp-block-navigation-item.current-menu-item > .wp-block-navigation-item__content,
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item.is-mega > .wp-block-navigation__submenu-container > .wp-block-navigation-item.has-child > .wp-block-navigation__submenu-container > .wp-block-navigation-item > .wp-block-navigation-item__content[aria-current="page"] {
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+}
+
 @media (max-width: 959px) {
   body:not(.wp-admin) .wh-header__top-inner {
     min-height: 36px;
@@ -256,5 +348,14 @@ body:not(.wp-admin) .wh-header__nav .wp-block-navigation-item__content:focus-vis
 
   body:not(.wp-admin) .wh-header__main-inner .wp-block-navigation {
     justify-content: flex-end;
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation-item__content {
+    padding-block: var(--wp--preset--spacing--20);
+  }
+
+  body:not(.wp-admin) header .wh-primary-nav .wp-block-navigation__submenu-container .wp-block-navigation-item__content {
+    padding-block: var(--wp--preset--spacing--20);
+    padding-inline: var(--wp--preset--spacing--30);
   }
 }

@@ -152,6 +152,58 @@
       ],
       "fontFamilies": [
         {
+          "name": "Inter",
+          "slug": "inter",
+          "fontFamily": "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+          "fontFace": [
+            {
+              "fontFamily": "Inter",
+              "fontStyle": "normal",
+              "fontWeight": "200",
+              "fontDisplay": "swap",
+              "src": [
+                "file:./assets/fonts/inter-v20-latin-200.woff2"
+              ]
+            },
+            {
+              "fontFamily": "Inter",
+              "fontStyle": "normal",
+              "fontWeight": "400",
+              "fontDisplay": "swap",
+              "src": [
+                "file:./assets/fonts/inter-v20-latin-400.woff2"
+              ]
+            },
+            {
+              "fontFamily": "Inter",
+              "fontStyle": "normal",
+              "fontWeight": "600",
+              "fontDisplay": "swap",
+              "src": [
+                "file:./assets/fonts/inter-v20-latin-600.woff2"
+              ]
+            },
+            {
+              "fontFamily": "Inter",
+              "fontStyle": "normal",
+              "fontWeight": "700",
+              "fontDisplay": "swap",
+              "src": [
+                "file:./assets/fonts/inter-v20-latin-700.woff2"
+              ]
+            },
+            {
+              "fontFamily": "Inter",
+              "fontStyle": "normal",
+              "fontWeight": "900",
+              "fontDisplay": "swap",
+              "src": [
+                "file:./assets/fonts/inter-v20-latin-900.woff2"
+              ]
+            }
+          ]
+        },
+        {
           "name": "Manrope",
           "slug": "manrope",
           "fontFamily": "Manrope, sans-serif"
@@ -193,9 +245,9 @@
       }
     },
     "typography": {
-      "fontFamily": "var:preset|font-family|manrope",
+      "fontFamily": "var:preset|font-family|inter",
       "fontSize": "var:preset|font-size|large",
-      "fontWeight": "300",
+      "fontWeight": "400",
       "letterSpacing": "-0.1px",
       "lineHeight": "1.4"
     },
@@ -623,13 +675,15 @@
       },
       "caption": {
         "typography": {
+          "fontWeight": "200",
           "fontSize": "var:preset|font-size|small",
           "lineHeight": "1.4"
         }
       },
       "h1": {
         "typography": {
-          "fontSize": "var:preset|font-size|xx-large"
+          "fontSize": "var:preset|font-size|xx-large",
+          "fontWeight": "700"
         }
       },
       "h2": {
